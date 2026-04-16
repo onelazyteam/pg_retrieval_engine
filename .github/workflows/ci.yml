@@ -31,15 +31,38 @@ jobs:
 
       - name: Ensure PostgreSQL build toolchain
         run: |
+          need_install=1
           if command -v pg_config >/dev/null 2>&1; then
-            echo "Using preinstalled PostgreSQL toolchain: $(pg_config --version)"
+            incdir="$(pg_config --includedir-server 2>/dev/null || true)"
+            if [ -n "$incdir" ] && [ -f "$incdir/postgres.h" ]; then
+              need_install=0
+              echo "Using preinstalled PostgreSQL toolchain: $(pg_config --version)"
+            else
+              echo "pg_config exists but server headers are missing, installing server-dev package"
+            fi
           else
-            echo "pg_config not found, installing Ubuntu PostgreSQL toolchain"
-            sudo apt-get update
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-              postgresql \
-              postgresql-server-dev-all
+            echo "pg_config not found, installing PostgreSQL toolchain"
           fi
+
+          if [ "$need_install" -eq 1 ]; then
+            sudo apt-get update
+            dev_pkg="$(apt-cache pkgnames | grep -E '^postgresql-server-dev-[0-9]+$' | sort -V | tail -n1)"
+
+            if [ -z "$dev_pkg" ]; then
+              echo "No versioned postgresql-server-dev-* package found."
+              echo "Attempting fallback with postgresql-server-dev-all."
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                postgresql \
+                postgresql-server-dev-all
+            else
+              major="${dev_pkg#postgresql-server-dev-}"
+              pg_pkg="postgresql-$major"
+              echo "Installing $pg_pkg and $dev_pkg"
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$pg_pkg" "$dev_pkg"
+            fi
+          fi
+
+          test -f "$(pg_config --includedir-server)/postgres.h"
 
       - name: Show toolchain versions
         run: |

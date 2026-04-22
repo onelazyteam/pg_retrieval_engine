@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>pg_faiss | FAISS for PostgreSQL</title>
-  <meta name="description" content="pg_faiss: FAISS-based vector search extension for PostgreSQL.">
+  <title>pg_retrieval_engine | FAISS for PostgreSQL</title>
+  <meta name="description" content="pg_retrieval_engine: FAISS-based vector search extension for PostgreSQL.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="hero">
     <div class="container">
       <div class="topbar">
-        <div class="brand">pg_faiss</div>
+        <div class="brand">pg_retrieval_engine</div>
         <div class="lang-switch" role="group" aria-label="Language switch">
           <button id="lang-zh" class="lang-btn active" type="button">中文</button>
           <button id="lang-en" class="lang-btn" type="button">English</button>
@@ -60,9 +60,9 @@
         <span class="lang lang-en">Quick Usage</span>
       </h2>
       <pre><code>CREATE EXTENSION vector;
-CREATE EXTENSION pg_faiss;
+CREATE EXTENSION pg_retrieval_engine;
 
-SELECT pg_faiss_index_create(
+SELECT pg_retrieval_engine_index_create(
   'docs_hnsw',
   768,
   'cosine',
@@ -72,7 +72,7 @@ SELECT pg_faiss_index_create(
 );
 
 SELECT *
-FROM pg_faiss_index_search(
+FROM pg_retrieval_engine_index_search(
   'docs_hnsw',
   '[0.1,0.2,0.3,...]'::vector,
   10,
@@ -95,10 +95,10 @@ FROM pg_faiss_index_search(
             <tr>
               <th>Scenario</th>
               <th>pgvector avg_ms</th>
-              <th>pg_faiss(batch) avg_ms</th>
+              <th>pg_retrieval_engine(batch) avg_ms</th>
               <th>Speedup</th>
               <th>pgvector Recall@10</th>
-              <th>pg_faiss Recall@10</th>
+              <th>pg_retrieval_engine Recall@10</th>
             </tr>
           </thead>
           <tbody>
@@ -128,22 +128,22 @@ FROM pg_faiss_index_search(
     </section>
 
     <section class="card grid">
-      <a class="link-card" data-gh-path="contrib/pg_faiss/README.zh.md" href="https://github.com" target="_blank" rel="noopener">
+      <a class="link-card" data-gh-path="contrib/pg_retrieval_engine/README.zh.md" href="https://github.com" target="_blank" rel="noopener">
         <h3>README (ZH)</h3>
         <p class="lang lang-zh">安装、性能、示例总览</p>
         <p class="lang lang-en">Install, performance, and usage overview</p>
       </a>
-      <a class="link-card" data-gh-path="contrib/pg_faiss/README.md" href="https://github.com" target="_blank" rel="noopener">
+      <a class="link-card" data-gh-path="contrib/pg_retrieval_engine/README.md" href="https://github.com" target="_blank" rel="noopener">
         <h3>README (EN)</h3>
         <p class="lang lang-zh">英文说明入口</p>
         <p class="lang lang-en">English entry documentation</p>
       </a>
-      <a class="link-card" data-gh-path="contrib/pg_faiss/docs/api.zh.md" href="https://github.com" target="_blank" rel="noopener">
+      <a class="link-card" data-gh-path="contrib/pg_retrieval_engine/docs/api.zh.md" href="https://github.com" target="_blank" rel="noopener">
         <h3>API</h3>
         <p class="lang lang-zh">每个接口的参数与语义</p>
         <p class="lang lang-en">Per-function parameter semantics</p>
       </a>
-      <a class="link-card" data-gh-path="contrib/pg_faiss/docs/design.zh.md" href="https://github.com" target="_blank" rel="noopener">
+      <a class="link-card" data-gh-path="contrib/pg_retrieval_engine/docs/design.zh.md" href="https://github.com" target="_blank" rel="noopener">
         <h3>Design</h3>
         <p class="lang lang-zh">架构与性能方法学</p>
         <p class="lang lang-en">Architecture and performance methodology</p>
@@ -153,8 +153,8 @@ FROM pg_faiss_index_search(
 
   <footer class="footer">
     <div class="container">
-      <span class="lang lang-zh">pg_faiss v0.2 · GitHub Pages</span>
-      <span class="lang lang-en">pg_faiss v0.2 · GitHub Pages</span>
+      <span class="lang lang-zh">pg_retrieval_engine v0.2 · GitHub Pages</span>
+      <span class="lang lang-en">pg_retrieval_engine v0.2 · GitHub Pages</span>
     </div>
   </footer>
 

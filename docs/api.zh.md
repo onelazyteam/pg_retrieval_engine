@@ -1,4 +1,4 @@
-# pg_faiss v0.2 API 参考（完整参数版）
+# pg_retrieval_engine v0.2 API 参考（完整参数版）
 
 ## 1. 全局说明
 
@@ -11,27 +11,27 @@
 
 | 函数 | 返回 | 主要用途 |
 |---|---|---|
-| `pg_faiss_index_create` | `void` | 创建索引对象 |
-| `pg_faiss_index_train` | `void` | 训练 IVF/IVFPQ |
-| `pg_faiss_index_add` | `bigint` | 批量写入向量 |
-| `pg_faiss_index_search` | `table(id, distance)` | 单向量检索 |
-| `pg_faiss_index_search_batch` | `table(query_no, id, distance)` | 批量检索（优化路径） |
-| `pg_faiss_index_search_filtered` | `table(id, distance)` | 混合检索（单查，ID 过滤） |
-| `pg_faiss_index_search_batch_filtered` | `table(query_no, id, distance)` | 混合检索（批查，ID 过滤） |
-| `pg_faiss_index_autotune` | `jsonb` | 自动调参 |
-| `pg_faiss_metrics_reset` | `void` | 重置 runtime 指标 |
-| `pg_faiss_index_save` | `void` | 保存索引 |
-| `pg_faiss_index_load` | `void` | 加载索引 |
-| `pg_faiss_index_stats` | `jsonb` | 查看元信息+运行指标 |
-| `pg_faiss_index_drop` | `void` | 删除索引 |
-| `pg_faiss_reset` | `void` | 清空当前 backend 全部索引 |
+| `pg_retrieval_engine_index_create` | `void` | 创建索引对象 |
+| `pg_retrieval_engine_index_train` | `void` | 训练 IVF/IVFPQ |
+| `pg_retrieval_engine_index_add` | `bigint` | 批量写入向量 |
+| `pg_retrieval_engine_index_search` | `table(id, distance)` | 单向量检索 |
+| `pg_retrieval_engine_index_search_batch` | `table(query_no, id, distance)` | 批量检索（优化路径） |
+| `pg_retrieval_engine_index_search_filtered` | `table(id, distance)` | 混合检索（单查，ID 过滤） |
+| `pg_retrieval_engine_index_search_batch_filtered` | `table(query_no, id, distance)` | 混合检索（批查，ID 过滤） |
+| `pg_retrieval_engine_index_autotune` | `jsonb` | 自动调参 |
+| `pg_retrieval_engine_metrics_reset` | `void` | 重置 runtime 指标 |
+| `pg_retrieval_engine_index_save` | `void` | 保存索引 |
+| `pg_retrieval_engine_index_load` | `void` | 加载索引 |
+| `pg_retrieval_engine_index_stats` | `jsonb` | 查看元信息+运行指标 |
+| `pg_retrieval_engine_index_drop` | `void` | 删除索引 |
+| `pg_retrieval_engine_reset` | `void` | 清空当前 backend 全部索引 |
 
 ## 3. 接口详情
 
-### 3.1 `pg_faiss_index_create`
+### 3.1 `pg_retrieval_engine_index_create`
 
 ```sql
-pg_faiss_index_create(
+pg_retrieval_engine_index_create(
   name text,
   dim int,
   metric text,
@@ -61,27 +61,27 @@ pg_faiss_index_create(
 - `pq_bits`（IVFPQ，默认 8）
 - `gpu_device`（GPU 卡号，默认 0）
 
-### 3.2 `pg_faiss_index_train`
+### 3.2 `pg_retrieval_engine_index_train`
 
 ```sql
-pg_faiss_index_train(name text, training_vectors vector[]) returns void
+pg_retrieval_engine_index_train(name text, training_vectors vector[]) returns void
 ```
 
 - `training_vectors` 需为一维、非空、无 NULL、维度匹配。
 
-### 3.3 `pg_faiss_index_add`
+### 3.3 `pg_retrieval_engine_index_add`
 
 ```sql
-pg_faiss_index_add(name text, ids bigint[], vectors vector[]) returns bigint
+pg_retrieval_engine_index_add(name text, ids bigint[], vectors vector[]) returns bigint
 ```
 
 - `ids` 与 `vectors` 数量必须相同。
 - 返回写入条数。
 
-### 3.4 `pg_faiss_index_search`
+### 3.4 `pg_retrieval_engine_index_search`
 
 ```sql
-pg_faiss_index_search(
+pg_retrieval_engine_index_search(
   name text,
   query vector,
   k int,
@@ -95,10 +95,10 @@ pg_faiss_index_search(
 - `nprobe`（IVF 探测桶数）
 - `candidate_k`（候选集深度，默认 `k`）
 
-### 3.5 `pg_faiss_index_search_batch`
+### 3.5 `pg_retrieval_engine_index_search_batch`
 
 ```sql
-pg_faiss_index_search_batch(
+pg_retrieval_engine_index_search_batch(
   name text,
   queries vector[],
   k int,
@@ -113,10 +113,10 @@ pg_faiss_index_search_batch(
 - `candidate_k`
 - `batch_size`（批处理分块大小，默认使用索引的 `preferred_batch_size`）
 
-### 3.6 `pg_faiss_index_search_filtered`
+### 3.6 `pg_retrieval_engine_index_search_filtered`
 
 ```sql
-pg_faiss_index_search_filtered(
+pg_retrieval_engine_index_search_filtered(
   name text,
   query vector,
   k int,
@@ -127,10 +127,10 @@ pg_faiss_index_search_filtered(
 
 作用：ANN 检索后按 `filter_ids` allow-list 过滤，实现混合检索。
 
-### 3.7 `pg_faiss_index_search_batch_filtered`
+### 3.7 `pg_retrieval_engine_index_search_batch_filtered`
 
 ```sql
-pg_faiss_index_search_batch_filtered(
+pg_retrieval_engine_index_search_batch_filtered(
   name text,
   queries vector[],
   k int,
@@ -141,10 +141,10 @@ pg_faiss_index_search_batch_filtered(
 
 作用：批量混合检索。每个 query 在过滤后返回 top-k。
 
-### 3.8 `pg_faiss_index_autotune`
+### 3.8 `pg_retrieval_engine_index_autotune`
 
 ```sql
-pg_faiss_index_autotune(
+pg_retrieval_engine_index_autotune(
   name text,
   mode text default 'balanced',
   options jsonb default '{}'::jsonb
@@ -161,36 +161,36 @@ pg_faiss_index_autotune(
 
 返回：包含 `hnsw_ef_search` / `ivf_nprobe` / `preferred_batch_size` 的 old/new 对比。
 
-### 3.9 `pg_faiss_metrics_reset`
+### 3.9 `pg_retrieval_engine_metrics_reset`
 
 ```sql
-pg_faiss_metrics_reset(name text default null) returns void
+pg_retrieval_engine_metrics_reset(name text default null) returns void
 ```
 
 - `name is null`：重置当前 backend 全部索引 runtime 指标。
 - `name not null`：只重置目标索引 runtime 指标。
 
-### 3.10 `pg_faiss_index_save`
+### 3.10 `pg_retrieval_engine_index_save`
 
 ```sql
-pg_faiss_index_save(name text, path text) returns void
+pg_retrieval_engine_index_save(name text, path text) returns void
 ```
 
 - 主索引写到 `path`
 - 元数据写到 `path.meta`
 
-### 3.11 `pg_faiss_index_load`
+### 3.11 `pg_retrieval_engine_index_load`
 
 ```sql
-pg_faiss_index_load(name text, path text, device text default 'cpu') returns void
+pg_retrieval_engine_index_load(name text, path text, device text default 'cpu') returns void
 ```
 
 - 将磁盘索引加载为新索引名。
 
-### 3.12 `pg_faiss_index_stats`
+### 3.12 `pg_retrieval_engine_index_stats`
 
 ```sql
-pg_faiss_index_stats(name text) returns jsonb
+pg_retrieval_engine_index_stats(name text) returns jsonb
 ```
 
 包含三类信息：
@@ -199,16 +199,16 @@ pg_faiss_index_stats(name text) returns jsonb
 - 参数：`hnsw/ivf/ivfpq`
 - 运行指标：`runtime.*`（调用量、耗时、候选深度、batch 参数、autotune 状态等）
 
-### 3.13 `pg_faiss_index_drop`
+### 3.13 `pg_retrieval_engine_index_drop`
 
 ```sql
-pg_faiss_index_drop(name text) returns void
+pg_retrieval_engine_index_drop(name text) returns void
 ```
 
-### 3.14 `pg_faiss_reset`
+### 3.14 `pg_retrieval_engine_reset`
 
 ```sql
-pg_faiss_reset() returns void
+pg_retrieval_engine_reset() returns void
 ```
 
 ## 4. 常见错误
@@ -229,7 +229,7 @@ WITH allow_list AS (
     AND is_active = true
 )
 SELECT *
-FROM pg_faiss_index_search_filtered(
+FROM pg_retrieval_engine_index_search_filtered(
   'prod_idx',
   '[0.1,0.2,0.3,0.4]'::vector,
   20,

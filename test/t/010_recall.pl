@@ -4,19 +4,19 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
-my $dim = $ENV{PG_FAISS_RECALL_DIM} // 32;
-my $rows = $ENV{PG_FAISS_RECALL_ROWS} // 20000;
-my $queries = $ENV{PG_FAISS_RECALL_QUERIES} // 30;
+my $dim = $ENV{pg_retrieval_engine_RECALL_DIM} // 32;
+my $rows = $ENV{pg_retrieval_engine_RECALL_ROWS} // 20000;
+my $queries = $ENV{pg_retrieval_engine_RECALL_QUERIES} // 30;
 my $k = 10;
 my $recall_target = 0.95;
 
 my $array_sql = join(',', ('random()') x $dim);
-my $node = PostgreSQL::Test::Cluster->new('pg_faiss_recall');
+my $node = PostgreSQL::Test::Cluster->new('pg_retrieval_engine_recall');
 $node->init;
 $node->start;
 
 $node->safe_psql('postgres', 'CREATE EXTENSION vector;');
-$node->safe_psql('postgres', 'CREATE EXTENSION pg_faiss;');
+$node->safe_psql('postgres', 'CREATE EXTENSION pg_retrieval_engine;');
 
 $node->safe_psql('postgres', qq(
     SELECT setseed(0.42);
@@ -27,7 +27,7 @@ $node->safe_psql('postgres', qq(
 ));
 
 $node->safe_psql('postgres', qq(
-    SELECT pg_faiss_index_create(
+    SELECT pg_retrieval_engine_index_create(
         'recall_hnsw',
         $dim,
         'l2',
@@ -35,7 +35,7 @@ $node->safe_psql('postgres', qq(
         '{"m":32,"ef_construction":200,"ef_search":128}'::jsonb,
         'cpu'
     );
-    SELECT pg_faiss_index_add(
+    SELECT pg_retrieval_engine_index_add(
         'recall_hnsw',
         (SELECT array_agg(id ORDER BY id) FROM items),
         (SELECT array_agg(embedding ORDER BY id) FROM items)
@@ -64,7 +64,7 @@ for my $query (@query_vectors)
 
     my @actual = split(/\n/, $node->safe_psql('postgres', qq(
         SELECT id
-        FROM pg_faiss_index_search(
+        FROM pg_retrieval_engine_index_search(
             'recall_hnsw',
             '$query'::vector,
             $k,

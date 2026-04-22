@@ -1,8 +1,8 @@
-# pg_faiss v0.2 Design (Handover Edition)
+# pg_retrieval_engine v0.2 Design (Handover Edition)
 
 ## 1. Purpose
 
-This document is for engineers taking over `pg_faiss`. It explains:
+This document is for engineers taking over `pg_retrieval_engine`. It explains:
 
 - Core plugin architecture and execution model.
 - Newly implemented capabilities:
@@ -32,15 +32,15 @@ This document is for engineers taking over `pg_faiss`. It explains:
 - PostgreSQL: 18.3
 - pgvector: 0.8.2 (performance baseline)
 - FAISS: 1.14.1
-- pg_faiss extension: 0.2.0
+- pg_retrieval_engine extension: 0.2.0
 
 ## 4. Architecture
 
 ### 4.1 Components
 
-- Entry implementation: `src/pg_faiss.cpp`
-- Shared type definitions: `src/pg_faiss.h`
-- SQL API definitions: `sql/pg_faiss--0.2.0.sql`
+- Entry implementation: `src/pg_retrieval_engine.cpp`
+- Shared type definitions: `src/pg_retrieval_engine.h`
+- SQL API definitions: `sql/pg_retrieval_engine--0.2.0.sql`
 - Registry: backend-local `HTAB` keyed by index name
 - Runtime index handles:
   - `cpu_index` (always present)
@@ -59,18 +59,18 @@ This document is for engineers taking over `pg_faiss`. It explains:
 
 | Function | Purpose | Return |
 |---|---|---|
-| `pg_faiss_index_create` | Create index | `void` |
-| `pg_faiss_index_train` | Train index | `void` |
-| `pg_faiss_index_add` | Bulk insert | `bigint` |
-| `pg_faiss_index_search` | Single-query ANN | `table(id, distance)` |
-| `pg_faiss_index_search_batch` | Batch ANN (optimized path) | `table(query_no, id, distance)` |
-| `pg_faiss_index_search_filtered` | Hybrid single-query (ANN + ID filter) | `table(id, distance)` |
-| `pg_faiss_index_search_batch_filtered` | Hybrid batch-query (ANN + ID filter) | `table(query_no, id, distance)` |
-| `pg_faiss_index_autotune` | Auto-tune defaults | `jsonb` |
-| `pg_faiss_metrics_reset` | Reset runtime counters | `void` |
-| `pg_faiss_index_save/load` | Persist and restore | `void` |
-| `pg_faiss_index_stats` | Metadata + runtime metrics | `jsonb` |
-| `pg_faiss_index_drop/reset` | Cleanup | `void` |
+| `pg_retrieval_engine_index_create` | Create index | `void` |
+| `pg_retrieval_engine_index_train` | Train index | `void` |
+| `pg_retrieval_engine_index_add` | Bulk insert | `bigint` |
+| `pg_retrieval_engine_index_search` | Single-query ANN | `table(id, distance)` |
+| `pg_retrieval_engine_index_search_batch` | Batch ANN (optimized path) | `table(query_no, id, distance)` |
+| `pg_retrieval_engine_index_search_filtered` | Hybrid single-query (ANN + ID filter) | `table(id, distance)` |
+| `pg_retrieval_engine_index_search_batch_filtered` | Hybrid batch-query (ANN + ID filter) | `table(query_no, id, distance)` |
+| `pg_retrieval_engine_index_autotune` | Auto-tune defaults | `jsonb` |
+| `pg_retrieval_engine_metrics_reset` | Reset runtime counters | `void` |
+| `pg_retrieval_engine_index_save/load` | Persist and restore | `void` |
+| `pg_retrieval_engine_index_stats` | Metadata + runtime metrics | `jsonb` |
+| `pg_retrieval_engine_index_drop/reset` | Cleanup | `void` |
 
 ## 6. Feature #4: Observability (P0)
 
@@ -95,8 +95,8 @@ Per-index runtime counters include:
 
 ### 6.3 Exposure
 
-- `pg_faiss_index_stats(name)` now includes a `runtime` object.
-- `pg_faiss_metrics_reset(name default null)` resets runtime counters for one index or all indexes.
+- `pg_retrieval_engine_index_stats(name)` now includes a `runtime` object.
+- `pg_retrieval_engine_metrics_reset(name default null)` resets runtime counters for one index or all indexes.
 
 ## 7. Feature #5: Hybrid Retrieval (P1)
 
@@ -110,8 +110,8 @@ Support common production patterns: business filter + ANN retrieval, such as:
 
 ### 7.2 API
 
-- `pg_faiss_index_search_filtered`
-- `pg_faiss_index_search_batch_filtered`
+- `pg_retrieval_engine_index_search_filtered`
+- `pg_retrieval_engine_index_search_batch_filtered`
 
 Both accept `filter_ids bigint[]` as an allow-list.
 
@@ -138,7 +138,7 @@ Both accept `filter_ids bigint[]` as an allow-list.
 
 ### 8.1 API
 
-`pg_faiss_index_autotune(name, mode, options)`
+`pg_retrieval_engine_index_autotune(name, mode, options)`
 
 - `mode`: `latency` / `balanced` / `recall`
 - `options`:
@@ -192,7 +192,7 @@ A monolithic batch search allocates memory proportional to `num_queries * k`, wh
 
 ### 12.1 Regression coverage
 
-`test/sql/pg_faiss_test.sql` covers:
+`test/sql/pg_retrieval_engine_test.sql` covers:
 
 - lifecycle: create/train/add/search/save/load/drop/reset
 - filtered search and filtered batch search
@@ -209,15 +209,15 @@ A monolithic batch search allocates memory proportional to `num_queries * k`, wh
 
 ### 13.1 Adding a new index type
 
-1. Update enum in `PgFaissIndexType`.
+1. Update enum in `PgRetrievalEngineIndexType`.
 2. Extend `parse_index_type`, `index_type_name`, and `build_index`.
 3. Update SQL/docs/regression tests.
 
 ### 13.2 Adding a new metric/counter
 
-1. Add fields to `PgFaissIndexEntry`.
+1. Add fields to `PgRetrievalEngineIndexEntry`.
 2. Update success/error write points.
-3. Expose in `pg_faiss_index_stats`.
+3. Expose in `pg_retrieval_engine_index_stats`.
 4. Add regression assertions.
 
 ### 13.3 Release checklist

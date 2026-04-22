@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pg_faiss;
+CREATE EXTENSION IF NOT EXISTS pg_retrieval_engine;
 
 DROP TABLE IF EXISTS items;
 CREATE TABLE items (id bigint PRIMARY KEY, embedding vector(128));
@@ -25,9 +25,9 @@ DROP INDEX IF EXISTS items_ivf;
 CREATE INDEX items_hnsw ON items USING hnsw (embedding vector_l2_ops);
 ANALYZE items;
 
-SELECT pg_faiss_reset();
-SELECT pg_faiss_index_create('faiss_hnsw', 128, 'l2', 'hnsw', '{"m":32,"ef_construction":200,"ef_search":64}'::jsonb, 'cpu');
-SELECT pg_faiss_index_add(
+SELECT pg_retrieval_engine_reset();
+SELECT pg_retrieval_engine_index_create('faiss_hnsw', 128, 'l2', 'hnsw', '{"m":32,"ef_construction":200,"ef_search":64}'::jsonb, 'cpu');
+SELECT pg_retrieval_engine_index_add(
   'faiss_hnsw',
   (SELECT array_agg(id ORDER BY id) FROM items),
   (SELECT array_agg(embedding ORDER BY id) FROM items)
@@ -107,7 +107,7 @@ BEGIN
   t0 := clock_timestamp();
   CREATE TEMP TABLE pff_hnsw_raw AS
   SELECT query_no AS qno, id
-  FROM pg_faiss_index_search_batch(
+  FROM pg_retrieval_engine_index_search_batch(
     'faiss_hnsw',
     (SELECT array_agg(embedding ORDER BY qno)::vector[] FROM bench_queries),
     10,
@@ -125,7 +125,7 @@ BEGIN
   ) h ON h.qno = b.qno;
 
   INSERT INTO bench_results VALUES
-    ('pg_faiss_batch', 'hnsw', total_ms, total_ms / q_count, recall_val);
+    ('pg_retrieval_engine_batch', 'hnsw', total_ms, total_ms / q_count, recall_val);
 END
 $$;
 
@@ -133,9 +133,9 @@ DROP INDEX items_hnsw;
 CREATE INDEX items_ivf ON items USING ivfflat (embedding vector_l2_ops) WITH (lists = 256);
 ANALYZE items;
 
-SELECT pg_faiss_index_create('faiss_ivf', 128, 'l2', 'ivfflat', '{"nlist":256,"nprobe":16}'::jsonb, 'cpu');
-SELECT pg_faiss_index_train('faiss_ivf', (SELECT array_agg(embedding ORDER BY id) FROM items));
-SELECT pg_faiss_index_add(
+SELECT pg_retrieval_engine_index_create('faiss_ivf', 128, 'l2', 'ivfflat', '{"nlist":256,"nprobe":16}'::jsonb, 'cpu');
+SELECT pg_retrieval_engine_index_train('faiss_ivf', (SELECT array_agg(embedding ORDER BY id) FROM items));
+SELECT pg_retrieval_engine_index_add(
   'faiss_ivf',
   (SELECT array_agg(id ORDER BY id) FROM items),
   (SELECT array_agg(embedding ORDER BY id) FROM items)
@@ -206,7 +206,7 @@ BEGIN
   t0 := clock_timestamp();
   CREATE TEMP TABLE pff_ivf_raw AS
   SELECT query_no AS qno, id
-  FROM pg_faiss_index_search_batch(
+  FROM pg_retrieval_engine_index_search_batch(
     'faiss_ivf',
     (SELECT array_agg(embedding ORDER BY qno)::vector[] FROM bench_queries),
     10,
@@ -224,7 +224,7 @@ BEGIN
   ) h ON h.qno = b.qno;
 
   INSERT INTO bench_results VALUES
-    ('pg_faiss_batch', 'ivfflat', total_ms, total_ms / q_count, recall_val);
+    ('pg_retrieval_engine_batch', 'ivfflat', total_ms, total_ms / q_count, recall_val);
 END
 $$;
 
@@ -238,11 +238,11 @@ ORDER BY scenario, impl;
 WITH p AS (
   SELECT scenario, avg_ms, recall_at_10 FROM bench_results WHERE impl = 'pgvector'
 ), f AS (
-  SELECT scenario, avg_ms, recall_at_10 FROM bench_results WHERE impl = 'pg_faiss_batch'
+  SELECT scenario, avg_ms, recall_at_10 FROM bench_results WHERE impl = 'pg_retrieval_engine_batch'
 )
 SELECT p.scenario,
        round((p.avg_ms / f.avg_ms)::numeric, 2) AS speedup_x,
        round(p.recall_at_10::numeric, 4) AS pgvector_recall,
-       round(f.recall_at_10::numeric, 4) AS pg_faiss_recall
+       round(f.recall_at_10::numeric, 4) AS pg_retrieval_engine_recall
 FROM p JOIN f USING (scenario)
 ORDER BY p.scenario;

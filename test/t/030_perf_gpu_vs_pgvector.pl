@@ -5,15 +5,15 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
-if (!$ENV{PG_FAISS_RUN_PERF_GPU})
+if (!$ENV{pg_retrieval_engine_RUN_PERF_GPU})
 {
-    plan skip_all => 'set PG_FAISS_RUN_PERF_GPU=1 to run GPU performance comparison';
+    plan skip_all => 'set pg_retrieval_engine_RUN_PERF_GPU=1 to run GPU performance comparison';
 }
 
-my $dim = $ENV{PG_FAISS_PERF_GPU_DIM} // 768;
-my $rows = $ENV{PG_FAISS_PERF_GPU_ROWS} // 1_000_000;
-my $queries = $ENV{PG_FAISS_PERF_GPU_QUERIES} // 100;
-my $k = $ENV{PG_FAISS_PERF_GPU_K} // 10;
+my $dim = $ENV{pg_retrieval_engine_PERF_GPU_DIM} // 768;
+my $rows = $ENV{pg_retrieval_engine_PERF_GPU_ROWS} // 1_000_000;
+my $queries = $ENV{pg_retrieval_engine_PERF_GPU_QUERIES} // 100;
+my $k = $ENV{pg_retrieval_engine_PERF_GPU_K} // 10;
 my $recall_target = 0.95;
 my $speedup_target = 10.0;
 
@@ -21,12 +21,12 @@ my $array_sql = join(',', ('random()') x $dim);
 my $query_stride = int($rows / $queries);
 $query_stride = 1 if $query_stride < 1;
 
-my $node = PostgreSQL::Test::Cluster->new('pg_faiss_perf_gpu');
+my $node = PostgreSQL::Test::Cluster->new('pg_retrieval_engine_perf_gpu');
 $node->init;
 $node->start;
 
 $node->safe_psql('postgres', 'CREATE EXTENSION vector;');
-$node->safe_psql('postgres', 'CREATE EXTENSION pg_faiss;');
+$node->safe_psql('postgres', 'CREATE EXTENSION pg_retrieval_engine;');
 
 $node->safe_psql('postgres', qq(
     SELECT setseed(0.42);
@@ -41,7 +41,7 @@ $node->safe_psql('postgres', qq(
 ));
 
 my ($ret, $stdout, $stderr) = $node->psql('postgres', qq(
-    SELECT pg_faiss_index_create(
+    SELECT pg_retrieval_engine_index_create(
         'faiss_gpu_hnsw',
         $dim,
         'l2',
@@ -57,7 +57,7 @@ if ($ret != 0)
 }
 
 $node->safe_psql('postgres', qq(
-    SELECT pg_faiss_index_add(
+    SELECT pg_retrieval_engine_index_add(
         'faiss_gpu_hnsw',
         (SELECT array_agg(id ORDER BY id) FROM items),
         (SELECT array_agg(embedding ORDER BY id) FROM items)
@@ -130,11 +130,11 @@ my ($recall_pgvector, $time_pgvector) = run_plan('pgvector_hnsw', sub {
     );
 });
 
-my ($recall_faiss_gpu, $time_faiss_gpu) = run_plan('pg_faiss_gpu_hnsw', sub {
+my ($recall_faiss_gpu, $time_faiss_gpu) = run_plan('pg_retrieval_engine_gpu_hnsw', sub {
     my ($query) = @_;
     return qq(
         SELECT id
-        FROM pg_faiss_index_search(
+        FROM pg_retrieval_engine_index_search(
             'faiss_gpu_hnsw',
             '$query'::vector,
             $k,
@@ -144,7 +144,7 @@ my ($recall_faiss_gpu, $time_faiss_gpu) = run_plan('pg_faiss_gpu_hnsw', sub {
     );
 });
 
-cmp_ok($recall_faiss_gpu, '>=', $recall_target, 'pg_faiss GPU recall target met');
+cmp_ok($recall_faiss_gpu, '>=', $recall_target, 'pg_retrieval_engine GPU recall target met');
 
 my $speedup = $time_pgvector / $time_faiss_gpu;
 diag(sprintf('GPU speedup=%.4fx', $speedup));

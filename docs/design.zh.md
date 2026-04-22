@@ -1,8 +1,8 @@
-# pg_faiss v0.2 设计文档（研发接手版）
+# pg_retrieval_engine v0.2 设计文档（研发接手版）
 
 ## 1. 文档目的
 
-本设计文档面向后续接手 `pg_faiss` 的研发同学，目标是：
+本设计文档面向后续接手 `pg_retrieval_engine` 的研发同学，目标是：
 
 - 说明当前插件的核心架构与执行模型。
 - 说明本期新增能力：
@@ -38,9 +38,9 @@
 
 ### 4.1 组件
 
-- 入口文件：`src/pg_faiss.cpp`
-- 元信息定义：`src/pg_faiss.h`
-- SQL 定义：`sql/pg_faiss--0.2.0.sql`
+- 入口文件：`src/pg_retrieval_engine.cpp`
+- 元信息定义：`src/pg_retrieval_engine.h`
+- SQL 定义：`sql/pg_retrieval_engine--0.2.0.sql`
 - 注册表：backend 本地 `HTAB`（键为 index name）
 - 运行态对象：
   - `cpu_index`（必有）
@@ -59,18 +59,18 @@
 
 | 函数 | 用途 | 返回 |
 |---|---|---|
-| `pg_faiss_index_create` | 创建索引 | `void` |
-| `pg_faiss_index_train` | 训练索引 | `void` |
-| `pg_faiss_index_add` | 批量写入 | `bigint` |
-| `pg_faiss_index_search` | 单查询 | `table(id, distance)` |
-| `pg_faiss_index_search_batch` | 批查询（优化路径） | `table(query_no, id, distance)` |
-| `pg_faiss_index_search_filtered` | 混合检索（单查，ID 过滤） | `table(id, distance)` |
-| `pg_faiss_index_search_batch_filtered` | 混合检索（批查，ID 过滤） | `table(query_no, id, distance)` |
-| `pg_faiss_index_autotune` | 自动调参 | `jsonb` |
-| `pg_faiss_metrics_reset` | 重置运行时指标 | `void` |
-| `pg_faiss_index_save/load` | 持久化与恢复 | `void` |
-| `pg_faiss_index_stats` | 元信息+运行指标 | `jsonb` |
-| `pg_faiss_index_drop/reset` | 清理资源 | `void` |
+| `pg_retrieval_engine_index_create` | 创建索引 | `void` |
+| `pg_retrieval_engine_index_train` | 训练索引 | `void` |
+| `pg_retrieval_engine_index_add` | 批量写入 | `bigint` |
+| `pg_retrieval_engine_index_search` | 单查询 | `table(id, distance)` |
+| `pg_retrieval_engine_index_search_batch` | 批查询（优化路径） | `table(query_no, id, distance)` |
+| `pg_retrieval_engine_index_search_filtered` | 混合检索（单查，ID 过滤） | `table(id, distance)` |
+| `pg_retrieval_engine_index_search_batch_filtered` | 混合检索（批查，ID 过滤） | `table(query_no, id, distance)` |
+| `pg_retrieval_engine_index_autotune` | 自动调参 | `jsonb` |
+| `pg_retrieval_engine_metrics_reset` | 重置运行时指标 | `void` |
+| `pg_retrieval_engine_index_save/load` | 持久化与恢复 | `void` |
+| `pg_retrieval_engine_index_stats` | 元信息+运行指标 | `jsonb` |
+| `pg_retrieval_engine_index_drop/reset` | 清理资源 | `void` |
 
 ## 6. Feature #4：可观测性（P0）
 
@@ -94,8 +94,8 @@
 
 ### 6.3 暴露方式
 
-- `pg_faiss_index_stats(name)` 新增 `runtime` 字段。
-- `pg_faiss_metrics_reset(name default null)` 可重置单索引或全部索引的 runtime 计数。
+- `pg_retrieval_engine_index_stats(name)` 新增 `runtime` 字段。
+- `pg_retrieval_engine_metrics_reset(name default null)` 可重置单索引或全部索引的 runtime 计数。
 
 ### 6.4 写入点
 
@@ -114,8 +114,8 @@
 
 ### 7.2 API 设计
 
-- `pg_faiss_index_search_filtered`
-- `pg_faiss_index_search_batch_filtered`
+- `pg_retrieval_engine_index_search_filtered`
+- `pg_retrieval_engine_index_search_batch_filtered`
 
 两者都接收 `filter_ids bigint[]`（allow-list）。
 
@@ -142,7 +142,7 @@
 
 ### 8.1 API
 
-`pg_faiss_index_autotune(name, mode, options)`
+`pg_retrieval_engine_index_autotune(name, mode, options)`
 
 - `mode`: `latency` / `balanced` / `recall`
 - `options`:
@@ -197,7 +197,7 @@
 
 ### 12.1 回归测试（已覆盖）
 
-`test/sql/pg_faiss_test.sql` 覆盖：
+`test/sql/pg_retrieval_engine_test.sql` 覆盖：
 
 - create/train/add/search/search_batch
 - filtered search / filtered batch
@@ -215,15 +215,15 @@
 
 ### 13.1 新增索引类型
 
-1. 在 `PgFaissIndexType` 增加枚举。
+1. 在 `PgRetrievalEngineIndexType` 增加枚举。
 2. 修改 `parse_index_type/index_type_name/build_index`。
 3. 更新 SQL/API 文档与回归测试。
 
 ### 13.2 新增可观测指标
 
-1. 在 `PgFaissIndexEntry` 增加字段。
+1. 在 `PgRetrievalEngineIndexEntry` 增加字段。
 2. 在对应成功/异常路径更新计数。
-3. 在 `pg_faiss_index_stats` 暴露字段。
+3. 在 `pg_retrieval_engine_index_stats` 暴露字段。
 4. 补回归断言。
 
 ### 13.3 发版检查

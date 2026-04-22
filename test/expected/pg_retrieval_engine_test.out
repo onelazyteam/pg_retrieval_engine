@@ -1,12 +1,12 @@
 CREATE EXTENSION vector;
-CREATE EXTENSION pg_faiss;
-SELECT pg_faiss_reset() IS NOT NULL AS reset_ok;
+CREATE EXTENSION pg_retrieval_engine;
+SELECT pg_retrieval_engine_reset() IS NOT NULL AS reset_ok;
  reset_ok 
 ----------
  t
 (1 row)
 
-SELECT pg_faiss_index_create(
+SELECT pg_retrieval_engine_index_create(
     'idx_h',
     4,
     'l2',
@@ -19,7 +19,7 @@ SELECT pg_faiss_index_create(
  t
 (1 row)
 
-SELECT pg_faiss_index_add(
+SELECT pg_retrieval_engine_index_add(
     'idx_h',
     ARRAY[1,2,3,4]::bigint[],
     ARRAY[
@@ -34,14 +34,14 @@ SELECT pg_faiss_index_add(
           4
 (1 row)
 
-SELECT (pg_faiss_index_stats('idx_h')->>'num_vectors')::int AS hnsw_num_vectors;
+SELECT (pg_retrieval_engine_index_stats('idx_h')->>'num_vectors')::int AS hnsw_num_vectors;
  hnsw_num_vectors 
 ------------------
                 4
 (1 row)
 
 SELECT id
-FROM pg_faiss_index_search('idx_h', '[1,0,0,0]'::vector, 2, '{}'::jsonb)
+FROM pg_retrieval_engine_index_search('idx_h', '[1,0,0,0]'::vector, 2, '{}'::jsonb)
 ORDER BY distance, id;
  id 
 ----
@@ -50,7 +50,7 @@ ORDER BY distance, id;
 (2 rows)
 
 SELECT id
-FROM pg_faiss_index_search_filtered(
+FROM pg_retrieval_engine_index_search_filtered(
     'idx_h',
     '[1,0,0,0]'::vector,
     2,
@@ -65,7 +65,7 @@ ORDER BY distance, id;
 (2 rows)
 
 SELECT count(*) AS batch_rows
-FROM pg_faiss_index_search_batch(
+FROM pg_retrieval_engine_index_search_batch(
     'idx_h',
     ARRAY['[1,0,0,0]'::vector, '[4,0,0,0]'::vector]::vector[],
     2,
@@ -77,7 +77,7 @@ FROM pg_faiss_index_search_batch(
 (1 row)
 
 SELECT count(*) AS filtered_batch_rows
-FROM pg_faiss_index_search_batch_filtered(
+FROM pg_retrieval_engine_index_search_batch_filtered(
     'idx_h',
     ARRAY['[1,0,0,0]'::vector, '[4,0,0,0]'::vector]::vector[],
     2,
@@ -89,57 +89,57 @@ FROM pg_faiss_index_search_batch_filtered(
                    4
 (1 row)
 
-SELECT (pg_faiss_index_autotune('idx_h', 'balanced', '{"target_recall":0.97}'::jsonb)
+SELECT (pg_retrieval_engine_index_autotune('idx_h', 'balanced', '{"target_recall":0.97}'::jsonb)
         -> 'preferred_batch_size' ->> 'new')::int > 0 AS autotune_ok;
  autotune_ok 
 -------------
  t
 (1 row)
 
-SELECT (pg_faiss_index_stats('idx_h')->'runtime'->>'search_filtered_calls')::int >= 2 AS runtime_filtered_ok;
+SELECT (pg_retrieval_engine_index_stats('idx_h')->'runtime'->>'search_filtered_calls')::int >= 2 AS runtime_filtered_ok;
  runtime_filtered_ok 
 ---------------------
  t
 (1 row)
 
-SELECT pg_faiss_metrics_reset('idx_h') IS NOT NULL AS metrics_reset_ok;
+SELECT pg_retrieval_engine_metrics_reset('idx_h') IS NOT NULL AS metrics_reset_ok;
  metrics_reset_ok 
 ------------------
  t
 (1 row)
 
-SELECT (pg_faiss_index_stats('idx_h')->'runtime'->>'search_query_total')::int AS search_query_total_after_reset;
+SELECT (pg_retrieval_engine_index_stats('idx_h')->'runtime'->>'search_query_total')::int AS search_query_total_after_reset;
  search_query_total_after_reset 
 --------------------------------
                               0
 (1 row)
 
-SELECT pg_faiss_index_save('idx_h', '/tmp/pg_faiss_regress.idx') IS NOT NULL AS save_ok;
+SELECT pg_retrieval_engine_index_save('idx_h', '/tmp/pg_retrieval_engine_regress.idx') IS NOT NULL AS save_ok;
  save_ok 
 ---------
  t
 (1 row)
 
-SELECT pg_faiss_index_drop('idx_h') IS NOT NULL AS drop_hnsw_ok;
+SELECT pg_retrieval_engine_index_drop('idx_h') IS NOT NULL AS drop_hnsw_ok;
  drop_hnsw_ok 
 --------------
  t
 (1 row)
 
-SELECT pg_faiss_index_load('idx_h', '/tmp/pg_faiss_regress.idx', 'cpu') IS NOT NULL AS load_ok;
+SELECT pg_retrieval_engine_index_load('idx_h', '/tmp/pg_retrieval_engine_regress.idx', 'cpu') IS NOT NULL AS load_ok;
  load_ok 
 ---------
  t
 (1 row)
 
 SELECT id
-FROM pg_faiss_index_search('idx_h', '[1,0,0,0]'::vector, 1, '{}'::jsonb);
+FROM pg_retrieval_engine_index_search('idx_h', '[1,0,0,0]'::vector, 1, '{}'::jsonb);
  id 
 ----
   1
 (1 row)
 
-SELECT pg_faiss_index_create(
+SELECT pg_retrieval_engine_index_create(
     'idx_ivf',
     4,
     'cosine',
@@ -152,7 +152,7 @@ SELECT pg_faiss_index_create(
  t
 (1 row)
 
-SELECT pg_faiss_index_train(
+SELECT pg_retrieval_engine_index_train(
     'idx_ivf',
     ARRAY[
         '[1,0,0,0]'::vector,
@@ -166,7 +166,7 @@ SELECT pg_faiss_index_train(
  t
 (1 row)
 
-SELECT pg_faiss_index_add(
+SELECT pg_retrieval_engine_index_add(
     'idx_ivf',
     ARRAY[11,12,13,14]::bigint[],
     ARRAY[
@@ -182,25 +182,25 @@ SELECT pg_faiss_index_add(
 (1 row)
 
 SELECT id
-FROM pg_faiss_index_search('idx_ivf', '[1,0,0,0]'::vector, 1, '{"nprobe":2}'::jsonb);
+FROM pg_retrieval_engine_index_search('idx_ivf', '[1,0,0,0]'::vector, 1, '{"nprobe":2}'::jsonb);
  id 
 ----
  11
 (1 row)
 
-SELECT pg_faiss_index_drop('idx_h') IS NOT NULL AS drop_loaded_ok;
+SELECT pg_retrieval_engine_index_drop('idx_h') IS NOT NULL AS drop_loaded_ok;
  drop_loaded_ok 
 ----------------
  t
 (1 row)
 
-SELECT pg_faiss_index_drop('idx_ivf') IS NOT NULL AS drop_ivf_ok;
+SELECT pg_retrieval_engine_index_drop('idx_ivf') IS NOT NULL AS drop_ivf_ok;
  drop_ivf_ok 
 -------------
  t
 (1 row)
 
-SELECT pg_faiss_reset() IS NOT NULL AS final_reset_ok;
+SELECT pg_retrieval_engine_reset() IS NOT NULL AS final_reset_ok;
  final_reset_ok 
 ----------------
  t

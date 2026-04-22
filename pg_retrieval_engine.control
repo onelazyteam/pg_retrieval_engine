@@ -1,6 +1,6 @@
-# pg_faiss extension
+# pg_retrieval_engine extension
 comment = 'FAISS vector similarity search for PostgreSQL'
 default_version = '0.2.0'
-module_pathname = '$libdir/pg_faiss'
+module_pathname = '$libdir/pg_retrieval_engine'
 relocatable = false
 requires = 'vector'

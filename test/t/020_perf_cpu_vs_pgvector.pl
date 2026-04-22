@@ -5,15 +5,15 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
-if (!$ENV{PG_FAISS_RUN_PERF})
+if (!$ENV{pg_retrieval_engine_RUN_PERF})
 {
-    plan skip_all => 'set PG_FAISS_RUN_PERF=1 to run CPU performance comparison';
+    plan skip_all => 'set pg_retrieval_engine_RUN_PERF=1 to run CPU performance comparison';
 }
 
-my $dim = $ENV{PG_FAISS_PERF_DIM} // 768;
-my $rows = $ENV{PG_FAISS_PERF_ROWS} // 1_000_000;
-my $queries = $ENV{PG_FAISS_PERF_QUERIES} // 100;
-my $k = $ENV{PG_FAISS_PERF_K} // 10;
+my $dim = $ENV{pg_retrieval_engine_PERF_DIM} // 768;
+my $rows = $ENV{pg_retrieval_engine_PERF_ROWS} // 1_000_000;
+my $queries = $ENV{pg_retrieval_engine_PERF_QUERIES} // 100;
+my $k = $ENV{pg_retrieval_engine_PERF_K} // 10;
 my $recall_target = 0.95;
 my $speedup_target = 5.0;
 
@@ -21,12 +21,12 @@ my $array_sql = join(',', ('random()') x $dim);
 my $query_stride = int($rows / $queries);
 $query_stride = 1 if $query_stride < 1;
 
-my $node = PostgreSQL::Test::Cluster->new('pg_faiss_perf_cpu');
+my $node = PostgreSQL::Test::Cluster->new('pg_retrieval_engine_perf_cpu');
 $node->init;
 $node->start;
 
 $node->safe_psql('postgres', 'CREATE EXTENSION vector;');
-$node->safe_psql('postgres', 'CREATE EXTENSION pg_faiss;');
+$node->safe_psql('postgres', 'CREATE EXTENSION pg_retrieval_engine;');
 
 $node->safe_psql('postgres', qq(
     SELECT setseed(0.42);
@@ -42,7 +42,7 @@ $node->safe_psql('postgres', qq(
 ));
 
 $node->safe_psql('postgres', qq(
-    SELECT pg_faiss_index_create(
+    SELECT pg_retrieval_engine_index_create(
         'faiss_hnsw',
         $dim,
         'l2',
@@ -50,13 +50,13 @@ $node->safe_psql('postgres', qq(
         '{"m":32,"ef_construction":200,"ef_search":64}'::jsonb,
         'cpu'
     );
-    SELECT pg_faiss_index_add(
+    SELECT pg_retrieval_engine_index_add(
         'faiss_hnsw',
         (SELECT array_agg(id ORDER BY id) FROM items),
         (SELECT array_agg(embedding ORDER BY id) FROM items)
     );
 
-    SELECT pg_faiss_index_create(
+    SELECT pg_retrieval_engine_index_create(
         'faiss_ivf',
         $dim,
         'l2',
@@ -64,8 +64,8 @@ $node->safe_psql('postgres', qq(
         '{"nlist":4096,"nprobe":32}'::jsonb,
         'cpu'
     );
-    SELECT pg_faiss_index_train('faiss_ivf', (SELECT array_agg(embedding ORDER BY id) FROM items));
-    SELECT pg_faiss_index_add(
+    SELECT pg_retrieval_engine_index_train('faiss_ivf', (SELECT array_agg(embedding ORDER BY id) FROM items));
+    SELECT pg_retrieval_engine_index_add(
         'faiss_ivf',
         (SELECT array_agg(id ORDER BY id) FROM items),
         (SELECT array_agg(embedding ORDER BY id) FROM items)
@@ -138,11 +138,11 @@ my ($recall_pgvector_hnsw, $time_pgvector_hnsw) = run_plan('pgvector_hnsw', sub 
     );
 });
 
-my ($recall_faiss_hnsw, $time_faiss_hnsw) = run_plan('pg_faiss_hnsw', sub {
+my ($recall_faiss_hnsw, $time_faiss_hnsw) = run_plan('pg_retrieval_engine_hnsw', sub {
     my ($query) = @_;
     return qq(
         SELECT id
-        FROM pg_faiss_index_search(
+        FROM pg_retrieval_engine_index_search(
             'faiss_hnsw',
             '$query'::vector,
             $k,
@@ -164,11 +164,11 @@ my ($recall_pgvector_ivf, $time_pgvector_ivf) = run_plan('pgvector_ivfflat', sub
     );
 });
 
-my ($recall_faiss_ivf, $time_faiss_ivf) = run_plan('pg_faiss_ivfflat', sub {
+my ($recall_faiss_ivf, $time_faiss_ivf) = run_plan('pg_retrieval_engine_ivfflat', sub {
     my ($query) = @_;
     return qq(
         SELECT id
-        FROM pg_faiss_index_search(
+        FROM pg_retrieval_engine_index_search(
             'faiss_ivf',
             '$query'::vector,
             $k,
@@ -178,8 +178,8 @@ my ($recall_faiss_ivf, $time_faiss_ivf) = run_plan('pg_faiss_ivfflat', sub {
     );
 });
 
-cmp_ok($recall_faiss_hnsw, '>=', $recall_target, 'pg_faiss HNSW recall target met');
-cmp_ok($recall_faiss_ivf, '>=', $recall_target, 'pg_faiss IVFFlat recall target met');
+cmp_ok($recall_faiss_hnsw, '>=', $recall_target, 'pg_retrieval_engine HNSW recall target met');
+cmp_ok($recall_faiss_ivf, '>=', $recall_target, 'pg_retrieval_engine IVFFlat recall target met');
 
 my $speedup_hnsw = $time_pgvector_hnsw / $time_faiss_hnsw;
 my $speedup_ivf = $time_pgvector_ivf / $time_faiss_ivf;

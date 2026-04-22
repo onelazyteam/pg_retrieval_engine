@@ -4,8 +4,8 @@ on:
   push:
     branches: [main, master]
     paths:
-      - 'site/**'
-      - '.github/workflows/pages.yml'
+      - 'contrib/pg_retrieval_engine/site/**'
+      - '.github/workflows/pg_retrieval_engine-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pg-retrieval-engine-pages
+  group: 'pg-retrieval-engine-pages'
   cancel-in-progress: true
 
 jobs:
@@ -27,10 +27,10 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: contrib/pg_retrieval_engine/site
 
   deploy:
     needs: build

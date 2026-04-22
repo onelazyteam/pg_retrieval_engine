@@ -1,4 +1,4 @@
-name: pg_faiss-linux-cpu-ci
+name: pg_retrieval_engine-linux-cpu-ci
 
 on:
   push:
@@ -77,7 +77,7 @@ jobs:
           make -C /tmp/pgvector PG_CONFIG="$(which pg_config)"
           sudo make -C /tmp/pgvector PG_CONFIG="$(which pg_config)" install
 
-      - name: Build and install pg_faiss (CPU)
+      - name: Build and install pg_retrieval_engine (CPU)
         working-directory: .
         run: |
           FAISS_CFLAGS="$(pkg-config --cflags faiss 2>/dev/null || true)"

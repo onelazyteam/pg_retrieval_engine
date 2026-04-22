@@ -18,7 +18,7 @@ extern "C" {
 #include "utils/tuplestore.h"
 }
 
-#include "pg_faiss.h"
+#include "pg_retrieval_engine.h"
 
 #include <algorithm>
 #include <cmath>
@@ -47,20 +47,20 @@ PG_MODULE_MAGIC;
 }
 
 extern "C" {
-PG_FUNCTION_INFO_V1(pg_faiss_index_create);
-PG_FUNCTION_INFO_V1(pg_faiss_index_train);
-PG_FUNCTION_INFO_V1(pg_faiss_index_add);
-PG_FUNCTION_INFO_V1(pg_faiss_index_search);
-PG_FUNCTION_INFO_V1(pg_faiss_index_search_batch);
-PG_FUNCTION_INFO_V1(pg_faiss_index_search_filtered);
-PG_FUNCTION_INFO_V1(pg_faiss_index_search_batch_filtered);
-PG_FUNCTION_INFO_V1(pg_faiss_index_save);
-PG_FUNCTION_INFO_V1(pg_faiss_index_load);
-PG_FUNCTION_INFO_V1(pg_faiss_index_autotune);
-PG_FUNCTION_INFO_V1(pg_faiss_metrics_reset);
-PG_FUNCTION_INFO_V1(pg_faiss_index_stats);
-PG_FUNCTION_INFO_V1(pg_faiss_index_drop);
-PG_FUNCTION_INFO_V1(pg_faiss_reset);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_create);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_train);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_add);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_search);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_search_batch);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_search_filtered);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_search_batch_filtered);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_save);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_load);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_autotune);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_metrics_reset);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_stats);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_index_drop);
+PG_FUNCTION_INFO_V1(pg_retrieval_engine_reset);
 }
 
 typedef struct PgVector {
@@ -70,33 +70,33 @@ typedef struct PgVector {
   float x[FLEXIBLE_ARRAY_MEMBER];
 } PgVector;
 
-static HTAB* pg_faiss_registry = NULL;
+static HTAB* pg_retrieval_engine_registry = NULL;
 
 static inline void ensure_registry(void) {
-  if (pg_faiss_registry == NULL) {
+  if (pg_retrieval_engine_registry == NULL) {
     HASHCTL ctl;
 
     memset(&ctl, 0, sizeof(ctl));
-    ctl.keysize = PG_FAISS_MAX_INDEX_NAME;
-    ctl.entrysize = sizeof(PgFaissIndexEntry);
+    ctl.keysize = pg_retrieval_engine_MAX_INDEX_NAME;
+    ctl.entrysize = sizeof(PgRetrievalEngineIndexEntry);
     ctl.hcxt = TopMemoryContext;
 
-    pg_faiss_registry =
-        hash_create("pg_faiss index registry", 128, &ctl, HASH_ELEM | HASH_STRINGS | HASH_CONTEXT);
+    pg_retrieval_engine_registry =
+        hash_create("pg_retrieval_engine index registry", 128, &ctl, HASH_ELEM | HASH_STRINGS | HASH_CONTEXT);
 
-    if (pg_faiss_registry == NULL)
+    if (pg_retrieval_engine_registry == NULL)
       ereport(ERROR,
-              (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("failed to create pg_faiss registry")));
+              (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("failed to create pg_retrieval_engine registry")));
   }
 }
 
 static inline const char* metric_name(int metric) {
   switch (metric) {
-    case PG_FAISS_METRIC_L2:
+    case pg_retrieval_engine_METRIC_L2:
       return "l2";
-    case PG_FAISS_METRIC_IP:
+    case pg_retrieval_engine_METRIC_IP:
       return "ip";
-    case PG_FAISS_METRIC_COSINE:
+    case pg_retrieval_engine_METRIC_COSINE:
       return "cosine";
     default:
       return "unknown";
@@ -105,11 +105,11 @@ static inline const char* metric_name(int metric) {
 
 static inline const char* index_type_name(int index_type) {
   switch (index_type) {
-    case PG_FAISS_INDEX_HNSW:
+    case pg_retrieval_engine_INDEX_HNSW:
       return "hnsw";
-    case PG_FAISS_INDEX_IVF_FLAT:
+    case pg_retrieval_engine_INDEX_IVF_FLAT:
       return "ivfflat";
-    case PG_FAISS_INDEX_IVF_PQ:
+    case pg_retrieval_engine_INDEX_IVF_PQ:
       return "ivfpq";
     default:
       return "unknown";
@@ -117,22 +117,22 @@ static inline const char* index_type_name(int index_type) {
 }
 
 static inline const char* device_name(int device) {
-  return device == PG_FAISS_DEVICE_GPU ? "gpu" : "cpu";
+  return device == pg_retrieval_engine_DEVICE_GPU ? "gpu" : "cpu";
 }
 
 static inline const char* autotune_mode_name(int mode) {
   switch (mode) {
-    case PG_FAISS_AUTOTUNE_LATENCY:
+    case pg_retrieval_engine_AUTOTUNE_LATENCY:
       return "latency";
-    case PG_FAISS_AUTOTUNE_RECALL:
+    case pg_retrieval_engine_AUTOTUNE_RECALL:
       return "recall";
-    case PG_FAISS_AUTOTUNE_BALANCED:
+    case pg_retrieval_engine_AUTOTUNE_BALANCED:
     default:
       return "balanced";
   }
 }
 
-static inline void reset_runtime_stats(PgFaissIndexEntry* entry, bool reset_tuning) {
+static inline void reset_runtime_stats(PgRetrievalEngineIndexEntry* entry, bool reset_tuning) {
   entry->train_calls = 0;
   entry->add_calls = 0;
   entry->add_vectors_total = 0;
@@ -151,7 +151,7 @@ static inline void reset_runtime_stats(PgFaissIndexEntry* entry, bool reset_tuni
   if (reset_tuning) {
     entry->last_candidate_k = 0;
     entry->last_batch_size = 0;
-    entry->last_autotune_mode = PG_FAISS_AUTOTUNE_BALANCED;
+    entry->last_autotune_mode = pg_retrieval_engine_AUTOTUNE_BALANCED;
     entry->preferred_batch_size = 256;
   }
 }
@@ -163,25 +163,25 @@ static inline double elapsed_ms(const instr_time& start_time, const instr_time& 
   return INSTR_TIME_GET_MILLISEC(delta);
 }
 
-static inline void record_error(PgFaissIndexEntry* entry) {
+static inline void record_error(PgRetrievalEngineIndexEntry* entry) {
   if (entry != NULL) entry->error_calls++;
 }
 
-static inline void initialize_entry_defaults(PgFaissIndexEntry* entry) {
+static inline void initialize_entry_defaults(PgRetrievalEngineIndexEntry* entry) {
   reset_runtime_stats(entry, true);
-  if (entry->device == PG_FAISS_DEVICE_GPU) entry->preferred_batch_size = 1024;
+  if (entry->device == pg_retrieval_engine_DEVICE_GPU) entry->preferred_batch_size = 1024;
 }
 
 static inline faiss::MetricType to_faiss_metric(int metric) {
-  if (metric == PG_FAISS_METRIC_L2) return faiss::METRIC_L2;
+  if (metric == pg_retrieval_engine_METRIC_L2) return faiss::METRIC_L2;
 
   return faiss::METRIC_INNER_PRODUCT;
 }
 
-static inline PgFaissIndexEntry* lookup_entry(const char* name) {
-  if (pg_faiss_registry == NULL) return NULL;
+static inline PgRetrievalEngineIndexEntry* lookup_entry(const char* name) {
+  if (pg_retrieval_engine_registry == NULL) return NULL;
 
-  return (PgFaissIndexEntry*)hash_search(pg_faiss_registry, name, HASH_FIND, NULL);
+  return (PgRetrievalEngineIndexEntry*)hash_search(pg_retrieval_engine_registry, name, HASH_FIND, NULL);
 }
 
 static inline faiss::Index* unwrap_idmap(faiss::Index* index) {
@@ -208,9 +208,9 @@ static inline void normalize_many(float* vecs, int64 n, int dim) {
   for (int64 i = 0; i < n; i++) normalize_one(&vecs[i * dim], dim);
 }
 
-static inline faiss::Index* active_index(PgFaissIndexEntry* entry) {
+static inline faiss::Index* active_index(PgRetrievalEngineIndexEntry* entry) {
 #ifdef USE_FAISS_GPU
-  if (entry->device == PG_FAISS_DEVICE_GPU) {
+  if (entry->device == pg_retrieval_engine_DEVICE_GPU) {
     if (entry->gpu_index == NULL)
       ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
                       errmsg("GPU index for \"%s\" is not initialized", entry->name)));
@@ -227,8 +227,8 @@ static inline faiss::Index* active_index(PgFaissIndexEntry* entry) {
 }
 
 #ifdef USE_FAISS_GPU
-static void rebuild_gpu_index(PgFaissIndexEntry* entry) {
-  if (entry->device != PG_FAISS_DEVICE_GPU) return;
+static void rebuild_gpu_index(PgRetrievalEngineIndexEntry* entry) {
+  if (entry->device != pg_retrieval_engine_DEVICE_GPU) return;
 
   if (entry->gpu_resources == NULL) entry->gpu_resources = new faiss::gpu::StandardGpuResources();
 
@@ -241,8 +241,8 @@ static void rebuild_gpu_index(PgFaissIndexEntry* entry) {
       faiss::gpu::index_cpu_to_gpu(entry->gpu_resources, entry->gpu_device, entry->cpu_index);
 }
 
-static void sync_gpu_to_cpu(PgFaissIndexEntry* entry) {
-  if (entry->device != PG_FAISS_DEVICE_GPU || entry->gpu_index == NULL) return;
+static void sync_gpu_to_cpu(PgRetrievalEngineIndexEntry* entry) {
+  if (entry->device != pg_retrieval_engine_DEVICE_GPU || entry->gpu_index == NULL) return;
 
   faiss::Index* new_cpu = faiss::gpu::index_gpu_to_cpu(entry->gpu_index);
 
@@ -252,7 +252,7 @@ static void sync_gpu_to_cpu(PgFaissIndexEntry* entry) {
 }
 #endif
 
-static inline void free_entry_resources(PgFaissIndexEntry* entry) {
+static inline void free_entry_resources(PgRetrievalEngineIndexEntry* entry) {
 #ifdef USE_FAISS_GPU
   if (entry->gpu_index != NULL) {
     delete entry->gpu_index;
@@ -354,13 +354,13 @@ static int32 jsonb_option_int32(Jsonb* json, const char* key, int32 default_valu
 }
 
 static int parse_autotune_mode(const char* mode) {
-  if (pg_strcasecmp(mode, "balanced") == 0) return PG_FAISS_AUTOTUNE_BALANCED;
-  if (pg_strcasecmp(mode, "latency") == 0) return PG_FAISS_AUTOTUNE_LATENCY;
-  if (pg_strcasecmp(mode, "recall") == 0) return PG_FAISS_AUTOTUNE_RECALL;
+  if (pg_strcasecmp(mode, "balanced") == 0) return pg_retrieval_engine_AUTOTUNE_BALANCED;
+  if (pg_strcasecmp(mode, "latency") == 0) return pg_retrieval_engine_AUTOTUNE_LATENCY;
+  if (pg_strcasecmp(mode, "recall") == 0) return pg_retrieval_engine_AUTOTUNE_RECALL;
 
   ereport(ERROR,
           (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("unknown autotune mode: %s", mode)));
-  return PG_FAISS_AUTOTUNE_BALANCED;
+  return pg_retrieval_engine_AUTOTUNE_BALANCED;
 }
 
 static inline PgVector* datum_to_pgvector(Datum datum) {
@@ -465,7 +465,7 @@ typedef struct SearchExecutionOptions {
   bool changed_nprobe;
 } SearchExecutionOptions;
 
-static void apply_search_params(PgFaissIndexEntry* entry, faiss::Index* index, Jsonb* search_params,
+static void apply_search_params(PgRetrievalEngineIndexEntry* entry, faiss::Index* index, Jsonb* search_params,
                                 int32 effective_k, bool widen_candidate,
                                 SearchExecutionOptions* options) {
   faiss::Index* base = unwrap_idmap(index);
@@ -489,7 +489,7 @@ static void apply_search_params(PgFaissIndexEntry* entry, faiss::Index* index, J
   options->candidate_k = std::min<int64>(options->candidate_k, index->ntotal);
   if (options->batch_size <= 0) options->batch_size = entry->preferred_batch_size;
 
-  if (entry->index_type == PG_FAISS_INDEX_HNSW) {
+  if (entry->index_type == pg_retrieval_engine_INDEX_HNSW) {
     faiss::IndexHNSW* hnsw = dynamic_cast<faiss::IndexHNSW*>(base);
 
     if (hnsw != NULL) {
@@ -507,7 +507,7 @@ static void apply_search_params(PgFaissIndexEntry* entry, faiss::Index* index, J
     }
   }
 
-  if (entry->index_type == PG_FAISS_INDEX_IVF_FLAT || entry->index_type == PG_FAISS_INDEX_IVF_PQ) {
+  if (entry->index_type == pg_retrieval_engine_INDEX_IVF_FLAT || entry->index_type == pg_retrieval_engine_INDEX_IVF_PQ) {
     faiss::IndexIVF* ivf = dynamic_cast<faiss::IndexIVF*>(base);
 
     if (ivf != NULL) {
@@ -593,14 +593,14 @@ static void materialize_result_end(ReturnSetInfo* rsinfo, Tuplestorestate* tupst
   rsinfo->setDesc = tupdesc;
 }
 
-static void write_metadata_file(const PgFaissIndexEntry* entry, const char* path) {
+static void write_metadata_file(const PgRetrievalEngineIndexEntry* entry, const char* path) {
   std::ofstream out(std::string(path) + ".meta", std::ios::trunc);
 
   if (!out.is_open())
     ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
                     errmsg("could not open metadata file \"%s.meta\" for write", path)));
 
-  out << "version=" << PG_FAISS_VERSION << "\n";
+  out << "version=" << pg_retrieval_engine_VERSION << "\n";
   out << "metric=" << metric_name(entry->metric) << "\n";
   out << "index_type=" << index_type_name(entry->index_type) << "\n";
   out << "dim=" << entry->dim << "\n";
@@ -635,48 +635,48 @@ static std::unordered_map<std::string, std::string> read_metadata_file(const cha
 }
 
 static inline int parse_metric(const char* metric) {
-  if (pg_strcasecmp(metric, "l2") == 0) return PG_FAISS_METRIC_L2;
+  if (pg_strcasecmp(metric, "l2") == 0) return pg_retrieval_engine_METRIC_L2;
   if (pg_strcasecmp(metric, "ip") == 0 || pg_strcasecmp(metric, "inner_product") == 0)
-    return PG_FAISS_METRIC_IP;
-  if (pg_strcasecmp(metric, "cosine") == 0) return PG_FAISS_METRIC_COSINE;
+    return pg_retrieval_engine_METRIC_IP;
+  if (pg_strcasecmp(metric, "cosine") == 0) return pg_retrieval_engine_METRIC_COSINE;
 
   ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("unknown metric: %s", metric)));
 
-  return PG_FAISS_METRIC_L2;
+  return pg_retrieval_engine_METRIC_L2;
 }
 
 static inline int parse_index_type(const char* index_type) {
-  if (pg_strcasecmp(index_type, "hnsw") == 0) return PG_FAISS_INDEX_HNSW;
+  if (pg_strcasecmp(index_type, "hnsw") == 0) return pg_retrieval_engine_INDEX_HNSW;
   if (pg_strcasecmp(index_type, "ivfflat") == 0 || pg_strcasecmp(index_type, "ivf_flat") == 0)
-    return PG_FAISS_INDEX_IVF_FLAT;
+    return pg_retrieval_engine_INDEX_IVF_FLAT;
   if (pg_strcasecmp(index_type, "ivfpq") == 0 || pg_strcasecmp(index_type, "ivf_pq") == 0)
-    return PG_FAISS_INDEX_IVF_PQ;
+    return pg_retrieval_engine_INDEX_IVF_PQ;
 
   ereport(ERROR,
           (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("unknown index_type: %s", index_type)));
 
-  return PG_FAISS_INDEX_HNSW;
+  return pg_retrieval_engine_INDEX_HNSW;
 }
 
 static inline int parse_device(const char* device) {
-  if (pg_strcasecmp(device, "cpu") == 0) return PG_FAISS_DEVICE_CPU;
-  if (pg_strcasecmp(device, "gpu") == 0) return PG_FAISS_DEVICE_GPU;
+  if (pg_strcasecmp(device, "cpu") == 0) return pg_retrieval_engine_DEVICE_CPU;
+  if (pg_strcasecmp(device, "gpu") == 0) return pg_retrieval_engine_DEVICE_GPU;
 
   ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("unknown device: %s", device)));
 
-  return PG_FAISS_DEVICE_CPU;
+  return pg_retrieval_engine_DEVICE_CPU;
 }
 
-static faiss::Index* build_index(const PgFaissIndexEntry* entry) {
+static faiss::Index* build_index(const PgRetrievalEngineIndexEntry* entry) {
   faiss::MetricType metric = to_faiss_metric(entry->metric);
   faiss::Index* base = NULL;
 
-  if (entry->index_type == PG_FAISS_INDEX_HNSW) {
+  if (entry->index_type == pg_retrieval_engine_INDEX_HNSW) {
     faiss::IndexHNSWFlat* index = new faiss::IndexHNSWFlat(entry->dim, entry->hnsw_m, metric);
     index->hnsw.efConstruction = entry->hnsw_ef_construction;
     index->hnsw.efSearch = entry->hnsw_ef_search;
     base = index;
-  } else if (entry->index_type == PG_FAISS_INDEX_IVF_FLAT) {
+  } else if (entry->index_type == pg_retrieval_engine_INDEX_IVF_FLAT) {
     faiss::IndexFlat* quantizer = new faiss::IndexFlat(entry->dim, metric);
     faiss::IndexIVFFlat* index =
         new faiss::IndexIVFFlat(quantizer, entry->dim, entry->ivf_nlist, metric);
@@ -695,7 +695,7 @@ static faiss::Index* build_index(const PgFaissIndexEntry* entry) {
   return new faiss::IndexIDMap2(base);
 }
 
-extern "C" Datum pg_faiss_index_create(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_create(PG_FUNCTION_ARGS) {
   text* name_text = PG_GETARG_TEXT_PP(0);
   int32 dim = PG_GETARG_INT32(1);
   text* metric_text = PG_GETARG_TEXT_PP(2);
@@ -708,59 +708,59 @@ extern "C" Datum pg_faiss_index_create(PG_FUNCTION_ARGS) {
   char* index_type = text_to_cstring(index_type_text);
   char* device = text_to_cstring(device_text);
   bool found = false;
-  PgFaissIndexEntry* entry;
+  PgRetrievalEngineIndexEntry* entry;
 
-  if (dim < 1 || dim > PG_FAISS_MAX_DIMENSIONS)
+  if (dim < 1 || dim > pg_retrieval_engine_MAX_DIMENSIONS)
     ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                    errmsg("dim must be in range 1..%d", PG_FAISS_MAX_DIMENSIONS)));
+                    errmsg("dim must be in range 1..%d", pg_retrieval_engine_MAX_DIMENSIONS)));
 
-  if (strlen(name) >= PG_FAISS_MAX_INDEX_NAME)
+  if (strlen(name) >= pg_retrieval_engine_MAX_INDEX_NAME)
     ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG),
-                    errmsg("index name too long (max %d)", PG_FAISS_MAX_INDEX_NAME - 1)));
+                    errmsg("index name too long (max %d)", pg_retrieval_engine_MAX_INDEX_NAME - 1)));
 
   ensure_registry();
 
-  entry = (PgFaissIndexEntry*)hash_search(pg_faiss_registry, name, HASH_ENTER, &found);
+  entry = (PgRetrievalEngineIndexEntry*)hash_search(pg_retrieval_engine_registry, name, HASH_ENTER, &found);
 
   if (found)
     ereport(ERROR,
             (errcode(ERRCODE_DUPLICATE_OBJECT), errmsg("index \"%s\" already exists", name)));
 
-  memset(entry, 0, sizeof(PgFaissIndexEntry));
+  memset(entry, 0, sizeof(PgRetrievalEngineIndexEntry));
   strlcpy(entry->name, name, sizeof(entry->name));
   entry->dim = dim;
   entry->metric = parse_metric(metric);
   entry->index_type = parse_index_type(index_type);
   entry->device = parse_device(device);
 #ifndef USE_FAISS_GPU
-  if (entry->device == PG_FAISS_DEVICE_GPU)
+  if (entry->device == pg_retrieval_engine_DEVICE_GPU)
     ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                    errmsg("pg_faiss was built without GPU support")));
+                    errmsg("pg_retrieval_engine was built without GPU support")));
 #endif
 
-  entry->hnsw_m = jsonb_option_int32(options, "m", PG_FAISS_DEFAULT_HNSW_M, 2, 256);
+  entry->hnsw_m = jsonb_option_int32(options, "m", pg_retrieval_engine_DEFAULT_HNSW_M, 2, 256);
   entry->hnsw_ef_construction = jsonb_option_int32(
-      options, "ef_construction", PG_FAISS_DEFAULT_HNSW_EF_CONSTRUCTION, 4, 1000000);
+      options, "ef_construction", pg_retrieval_engine_DEFAULT_HNSW_EF_CONSTRUCTION, 4, 1000000);
   entry->hnsw_ef_search =
-      jsonb_option_int32(options, "ef_search", PG_FAISS_DEFAULT_HNSW_EF_SEARCH, 1, 1000000);
-  entry->ivf_nlist = jsonb_option_int32(options, "nlist", PG_FAISS_DEFAULT_IVF_NLIST, 1, 1000000);
+      jsonb_option_int32(options, "ef_search", pg_retrieval_engine_DEFAULT_HNSW_EF_SEARCH, 1, 1000000);
+  entry->ivf_nlist = jsonb_option_int32(options, "nlist", pg_retrieval_engine_DEFAULT_IVF_NLIST, 1, 1000000);
   entry->ivf_nprobe =
-      jsonb_option_int32(options, "nprobe", PG_FAISS_DEFAULT_IVF_NPROBE, 1, 1000000);
-  entry->ivfpq_m = jsonb_option_int32(options, "pq_m", PG_FAISS_DEFAULT_IVFPQ_M, 1, 4096);
-  entry->ivfpq_bits = jsonb_option_int32(options, "pq_bits", PG_FAISS_DEFAULT_IVFPQ_BITS, 1, 16);
+      jsonb_option_int32(options, "nprobe", pg_retrieval_engine_DEFAULT_IVF_NPROBE, 1, 1000000);
+  entry->ivfpq_m = jsonb_option_int32(options, "pq_m", pg_retrieval_engine_DEFAULT_IVFPQ_M, 1, 4096);
+  entry->ivfpq_bits = jsonb_option_int32(options, "pq_bits", pg_retrieval_engine_DEFAULT_IVFPQ_BITS, 1, 16);
   entry->gpu_device = jsonb_option_int32(options, "gpu_device", 0, 0, 128);
   initialize_entry_defaults(entry);
 
   try {
     entry->cpu_index = build_index(entry);
-    entry->is_trained = (entry->index_type == PG_FAISS_INDEX_HNSW);
+    entry->is_trained = (entry->index_type == pg_retrieval_engine_INDEX_HNSW);
     entry->num_vectors = 0;
 
 #ifdef USE_FAISS_GPU
-    if (entry->device == PG_FAISS_DEVICE_GPU) rebuild_gpu_index(entry);
+    if (entry->device == pg_retrieval_engine_DEVICE_GPU) rebuild_gpu_index(entry);
 #endif
   } catch (const std::exception& e) {
-    hash_search(pg_faiss_registry, name, HASH_REMOVE, NULL);
+    hash_search(pg_retrieval_engine_registry, name, HASH_REMOVE, NULL);
     record_error(entry);
     ereport(ERROR, (errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
                     errmsg("FAISS create error: %s", e.what())));
@@ -774,10 +774,10 @@ extern "C" Datum pg_faiss_index_create(PG_FUNCTION_ARGS) {
   PG_RETURN_VOID();
 }
 
-extern "C" Datum pg_faiss_index_train(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_train(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   ArrayType* vectors_arr = PG_GETARG_ARRAYTYPE_P(1);
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   std::vector<float> vectors;
   int64 n = 0;
 
@@ -787,7 +787,7 @@ extern "C" Datum pg_faiss_index_train(PG_FUNCTION_ARGS) {
 
   read_vector_array(vectors_arr, entry->dim, vectors, &n);
 
-  if (entry->metric == PG_FAISS_METRIC_COSINE) normalize_many(vectors.data(), n, entry->dim);
+  if (entry->metric == pg_retrieval_engine_METRIC_COSINE) normalize_many(vectors.data(), n, entry->dim);
 
   try {
     entry->train_calls++;
@@ -796,7 +796,7 @@ extern "C" Datum pg_faiss_index_train(PG_FUNCTION_ARGS) {
     entry->is_trained = index->is_trained;
     entry->num_vectors = index->ntotal;
 #ifdef USE_FAISS_GPU
-    if (entry->device == PG_FAISS_DEVICE_GPU) sync_gpu_to_cpu(entry);
+    if (entry->device == pg_retrieval_engine_DEVICE_GPU) sync_gpu_to_cpu(entry);
 #endif
   } catch (const std::exception& e) {
     record_error(entry);
@@ -808,11 +808,11 @@ extern "C" Datum pg_faiss_index_train(PG_FUNCTION_ARGS) {
   PG_RETURN_VOID();
 }
 
-extern "C" Datum pg_faiss_index_add(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_add(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   ArrayType* ids_arr = PG_GETARG_ARRAYTYPE_P(1);
   ArrayType* vectors_arr = PG_GETARG_ARRAYTYPE_P(2);
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   std::vector<faiss::idx_t> ids;
   std::vector<float> vectors;
   int64 n = 0;
@@ -829,7 +829,7 @@ extern "C" Datum pg_faiss_index_add(PG_FUNCTION_ARGS) {
                     errmsg("ids count (%lld) and vectors count (%lld) must match",
                            (long long)ids.size(), (long long)n)));
 
-  if (entry->metric == PG_FAISS_METRIC_COSINE) normalize_many(vectors.data(), n, entry->dim);
+  if (entry->metric == pg_retrieval_engine_METRIC_COSINE) normalize_many(vectors.data(), n, entry->dim);
 
   try {
     entry->add_calls++;
@@ -848,7 +848,7 @@ extern "C" Datum pg_faiss_index_add(PG_FUNCTION_ARGS) {
     entry->num_vectors = index->ntotal;
     entry->add_vectors_total += n;
 #ifdef USE_FAISS_GPU
-    if (entry->device == PG_FAISS_DEVICE_GPU) sync_gpu_to_cpu(entry);
+    if (entry->device == pg_retrieval_engine_DEVICE_GPU) sync_gpu_to_cpu(entry);
 #endif
   } catch (const std::exception& e) {
     record_error(entry);
@@ -860,12 +860,12 @@ extern "C" Datum pg_faiss_index_add(PG_FUNCTION_ARGS) {
   PG_RETURN_INT64(n);
 }
 
-extern "C" Datum pg_faiss_index_search(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_search(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   PgVector* query = datum_to_pgvector(PG_GETARG_DATUM(1));
   int32 k = PG_GETARG_INT32(2);
   Jsonb* search_params = PG_GETARG_JSONB_P(3);
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   ReturnSetInfo* rsinfo;
   Tuplestorestate* tupstore;
   TupleDesc tupdesc;
@@ -899,7 +899,7 @@ extern "C" Datum pg_faiss_index_search(PG_FUNCTION_ARGS) {
       bool params_applied = false;
 
       memcpy(query_buf.data(), query->x, sizeof(float) * entry->dim);
-      if (entry->metric == PG_FAISS_METRIC_COSINE) normalize_one(query_buf.data(), entry->dim);
+      if (entry->metric == pg_retrieval_engine_METRIC_COSINE) normalize_one(query_buf.data(), entry->dim);
 
       apply_search_params(entry, index, search_params, effective_k, false, &options);
       params_applied = true;
@@ -919,7 +919,7 @@ extern "C" Datum pg_faiss_index_search(PG_FUNCTION_ARGS) {
 
         if (labels[i] < 0) continue;
         distance = distances[i];
-        if (entry->metric == PG_FAISS_METRIC_COSINE) distance = 1.0f - distance;
+        if (entry->metric == pg_retrieval_engine_METRIC_COSINE) distance = 1.0f - distance;
         append_search_row(tupstore, tupdesc, 0, false, (int64)labels[i], distance);
         emitted_rows++;
       }
@@ -975,7 +975,7 @@ static int64 emit_batch_results(Tuplestorestate* tupstore, TupleDesc tupdesc, in
   return emitted_rows;
 }
 
-static void run_batch_search(PgFaissIndexEntry* entry, ArrayType* queries_arr, int32 k,
+static void run_batch_search(PgRetrievalEngineIndexEntry* entry, ArrayType* queries_arr, int32 k,
                              Jsonb* search_params, bool filtered,
                              const std::unordered_set<faiss::idx_t>* filter_ids,
                              Tuplestorestate* tupstore, TupleDesc tupdesc, int64* emitted_rows) {
@@ -986,7 +986,7 @@ static void run_batch_search(PgFaissIndexEntry* entry, ArrayType* queries_arr, i
 
   *emitted_rows = 0;
   read_vector_array(queries_arr, entry->dim, queries, &num_queries);
-  if (entry->metric == PG_FAISS_METRIC_COSINE)
+  if (entry->metric == pg_retrieval_engine_METRIC_COSINE)
     normalize_many(queries.data(), num_queries, entry->dim);
   if (effective_k <= 0) return;
 
@@ -1008,7 +1008,7 @@ static void run_batch_search(PgFaissIndexEntry* entry, ArrayType* queries_arr, i
                     labels.data());
       *emitted_rows += emit_batch_results(
           tupstore, tupdesc, (int32)offset, effective_k, options.candidate_k, chunk_queries,
-          distances, labels, entry->metric == PG_FAISS_METRIC_COSINE, filtered, filter_ids);
+          distances, labels, entry->metric == pg_retrieval_engine_METRIC_COSINE, filtered, filter_ids);
       offset += chunk_queries;
     }
   } catch (...) {
@@ -1020,12 +1020,12 @@ static void run_batch_search(PgFaissIndexEntry* entry, ArrayType* queries_arr, i
   entry->last_batch_size = options.batch_size;
 }
 
-extern "C" Datum pg_faiss_index_search_batch(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_search_batch(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   ArrayType* queries_arr = PG_GETARG_ARRAYTYPE_P(1);
   int32 k = PG_GETARG_INT32(2);
   Jsonb* search_params = PG_GETARG_JSONB_P(3);
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   ReturnSetInfo* rsinfo;
   Tuplestorestate* tupstore;
   TupleDesc tupdesc;
@@ -1062,13 +1062,13 @@ extern "C" Datum pg_faiss_index_search_batch(PG_FUNCTION_ARGS) {
   PG_RETURN_NULL();
 }
 
-extern "C" Datum pg_faiss_index_search_filtered(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_search_filtered(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   PgVector* query = datum_to_pgvector(PG_GETARG_DATUM(1));
   int32 k = PG_GETARG_INT32(2);
   ArrayType* filter_ids_arr = PG_GETARG_ARRAYTYPE_P(3);
   Jsonb* search_params = PG_GETARG_JSONB_P(4);
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   ReturnSetInfo* rsinfo;
   Tuplestorestate* tupstore;
   TupleDesc tupdesc;
@@ -1107,7 +1107,7 @@ extern "C" Datum pg_faiss_index_search_filtered(PG_FUNCTION_ARGS) {
       bool params_applied = false;
 
       memcpy(query_buf.data(), query->x, sizeof(float) * entry->dim);
-      if (entry->metric == PG_FAISS_METRIC_COSINE) normalize_one(query_buf.data(), entry->dim);
+      if (entry->metric == pg_retrieval_engine_METRIC_COSINE) normalize_one(query_buf.data(), entry->dim);
 
       apply_search_params(entry, index, search_params, effective_k, true, &options);
       params_applied = true;
@@ -1128,7 +1128,7 @@ extern "C" Datum pg_faiss_index_search_filtered(PG_FUNCTION_ARGS) {
         if (id < 0) continue;
         if (filter_ids.find(id) == filter_ids.end()) continue;
         distance = distances[i];
-        if (entry->metric == PG_FAISS_METRIC_COSINE) distance = 1.0f - distance;
+        if (entry->metric == pg_retrieval_engine_METRIC_COSINE) distance = 1.0f - distance;
         append_search_row(tupstore, tupdesc, 0, false, (int64)id, distance);
         emitted_rows++;
       }
@@ -1153,13 +1153,13 @@ extern "C" Datum pg_faiss_index_search_filtered(PG_FUNCTION_ARGS) {
   PG_RETURN_NULL();
 }
 
-extern "C" Datum pg_faiss_index_search_batch_filtered(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_search_batch_filtered(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   ArrayType* queries_arr = PG_GETARG_ARRAYTYPE_P(1);
   int32 k = PG_GETARG_INT32(2);
   ArrayType* filter_ids_arr = PG_GETARG_ARRAYTYPE_P(3);
   Jsonb* search_params = PG_GETARG_JSONB_P(4);
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   ReturnSetInfo* rsinfo;
   Tuplestorestate* tupstore;
   TupleDesc tupdesc;
@@ -1203,10 +1203,10 @@ extern "C" Datum pg_faiss_index_search_batch_filtered(PG_FUNCTION_ARGS) {
   PG_RETURN_NULL();
 }
 
-extern "C" Datum pg_faiss_index_save(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_save(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   char* path = text_to_cstring(PG_GETARG_TEXT_PP(1));
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
 
   if (entry == NULL)
     ereport(ERROR,
@@ -1215,7 +1215,7 @@ extern "C" Datum pg_faiss_index_save(PG_FUNCTION_ARGS) {
   try {
     entry->save_calls++;
 #ifdef USE_FAISS_GPU
-    if (entry->device == PG_FAISS_DEVICE_GPU) sync_gpu_to_cpu(entry);
+    if (entry->device == pg_retrieval_engine_DEVICE_GPU) sync_gpu_to_cpu(entry);
 #endif
 
     faiss::write_index(entry->cpu_index, path);
@@ -1232,32 +1232,32 @@ extern "C" Datum pg_faiss_index_save(PG_FUNCTION_ARGS) {
   PG_RETURN_VOID();
 }
 
-extern "C" Datum pg_faiss_index_load(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_load(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   char* path = text_to_cstring(PG_GETARG_TEXT_PP(1));
   char* device = text_to_cstring(PG_GETARG_TEXT_PP(2));
   int parsed_device = parse_device(device);
   bool found = false;
-  PgFaissIndexEntry* entry;
+  PgRetrievalEngineIndexEntry* entry;
   std::unordered_map<std::string, std::string> meta;
   faiss::Index* loaded_index = NULL;
   faiss::Index* base_index = NULL;
 
 #ifndef USE_FAISS_GPU
-  if (parsed_device == PG_FAISS_DEVICE_GPU)
+  if (parsed_device == pg_retrieval_engine_DEVICE_GPU)
     ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                    errmsg("pg_faiss was built without GPU support")));
+                    errmsg("pg_retrieval_engine was built without GPU support")));
 #endif
 
   ensure_registry();
 
-  entry = (PgFaissIndexEntry*)hash_search(pg_faiss_registry, name, HASH_ENTER, &found);
+  entry = (PgRetrievalEngineIndexEntry*)hash_search(pg_retrieval_engine_registry, name, HASH_ENTER, &found);
 
   if (found)
     ereport(ERROR,
             (errcode(ERRCODE_DUPLICATE_OBJECT), errmsg("index \"%s\" already exists", name)));
 
-  memset(entry, 0, sizeof(PgFaissIndexEntry));
+  memset(entry, 0, sizeof(PgRetrievalEngineIndexEntry));
   strlcpy(entry->name, name, sizeof(entry->name));
   initialize_entry_defaults(entry);
 
@@ -1272,18 +1272,18 @@ extern "C" Datum pg_faiss_index_load(PG_FUNCTION_ARGS) {
     entry->cpu_index = loaded_index;
     entry->dim = loaded_index->d;
     entry->metric =
-        loaded_index->metric_type == faiss::METRIC_L2 ? PG_FAISS_METRIC_L2 : PG_FAISS_METRIC_IP;
-    entry->index_type = PG_FAISS_INDEX_HNSW;
+        loaded_index->metric_type == faiss::METRIC_L2 ? pg_retrieval_engine_METRIC_L2 : pg_retrieval_engine_METRIC_IP;
+    entry->index_type = pg_retrieval_engine_INDEX_HNSW;
     entry->device = parsed_device;
-    if (entry->device == PG_FAISS_DEVICE_GPU) entry->preferred_batch_size = 1024;
+    if (entry->device == pg_retrieval_engine_DEVICE_GPU) entry->preferred_batch_size = 1024;
     base_index = unwrap_idmap(loaded_index);
 
     if (dynamic_cast<faiss::IndexHNSW*>(base_index) != NULL)
-      entry->index_type = PG_FAISS_INDEX_HNSW;
+      entry->index_type = pg_retrieval_engine_INDEX_HNSW;
     else if (dynamic_cast<faiss::IndexIVFPQ*>(base_index) != NULL)
-      entry->index_type = PG_FAISS_INDEX_IVF_PQ;
+      entry->index_type = pg_retrieval_engine_INDEX_IVF_PQ;
     else
-      entry->index_type = PG_FAISS_INDEX_IVF_FLAT;
+      entry->index_type = pg_retrieval_engine_INDEX_IVF_FLAT;
 
     if (meta.find("metric") != meta.end()) entry->metric = parse_metric(meta["metric"].c_str());
     if (meta.find("index_type") != meta.end())
@@ -1291,31 +1291,31 @@ extern "C" Datum pg_faiss_index_load(PG_FUNCTION_ARGS) {
     if (meta.find("hnsw_m") != meta.end())
       entry->hnsw_m = std::stoi(meta["hnsw_m"]);
     else
-      entry->hnsw_m = PG_FAISS_DEFAULT_HNSW_M;
+      entry->hnsw_m = pg_retrieval_engine_DEFAULT_HNSW_M;
     if (meta.find("hnsw_ef_construction") != meta.end())
       entry->hnsw_ef_construction = std::stoi(meta["hnsw_ef_construction"]);
     else
-      entry->hnsw_ef_construction = PG_FAISS_DEFAULT_HNSW_EF_CONSTRUCTION;
+      entry->hnsw_ef_construction = pg_retrieval_engine_DEFAULT_HNSW_EF_CONSTRUCTION;
     if (meta.find("hnsw_ef_search") != meta.end())
       entry->hnsw_ef_search = std::stoi(meta["hnsw_ef_search"]);
     else
-      entry->hnsw_ef_search = PG_FAISS_DEFAULT_HNSW_EF_SEARCH;
+      entry->hnsw_ef_search = pg_retrieval_engine_DEFAULT_HNSW_EF_SEARCH;
     if (meta.find("ivf_nlist") != meta.end())
       entry->ivf_nlist = std::stoi(meta["ivf_nlist"]);
     else
-      entry->ivf_nlist = PG_FAISS_DEFAULT_IVF_NLIST;
+      entry->ivf_nlist = pg_retrieval_engine_DEFAULT_IVF_NLIST;
     if (meta.find("ivf_nprobe") != meta.end())
       entry->ivf_nprobe = std::stoi(meta["ivf_nprobe"]);
     else
-      entry->ivf_nprobe = PG_FAISS_DEFAULT_IVF_NPROBE;
+      entry->ivf_nprobe = pg_retrieval_engine_DEFAULT_IVF_NPROBE;
     if (meta.find("ivfpq_m") != meta.end())
       entry->ivfpq_m = std::stoi(meta["ivfpq_m"]);
     else
-      entry->ivfpq_m = PG_FAISS_DEFAULT_IVFPQ_M;
+      entry->ivfpq_m = pg_retrieval_engine_DEFAULT_IVFPQ_M;
     if (meta.find("ivfpq_bits") != meta.end())
       entry->ivfpq_bits = std::stoi(meta["ivfpq_bits"]);
     else
-      entry->ivfpq_bits = PG_FAISS_DEFAULT_IVFPQ_BITS;
+      entry->ivfpq_bits = pg_retrieval_engine_DEFAULT_IVFPQ_BITS;
     if (meta.find("gpu_device") != meta.end())
       entry->gpu_device = std::stoi(meta["gpu_device"]);
     else
@@ -1327,10 +1327,10 @@ extern "C" Datum pg_faiss_index_load(PG_FUNCTION_ARGS) {
     strlcpy(entry->index_path, path, sizeof(entry->index_path));
 
 #ifdef USE_FAISS_GPU
-    if (entry->device == PG_FAISS_DEVICE_GPU) rebuild_gpu_index(entry);
+    if (entry->device == pg_retrieval_engine_DEVICE_GPU) rebuild_gpu_index(entry);
 #endif
   } catch (const std::exception& e) {
-    hash_search(pg_faiss_registry, name, HASH_REMOVE, NULL);
+    hash_search(pg_retrieval_engine_registry, name, HASH_REMOVE, NULL);
     record_error(entry);
     ereport(ERROR, (errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
                     errmsg("FAISS load error: %s", e.what())));
@@ -1348,11 +1348,11 @@ static int32 clamp_int32(int64 value, int32 min_value, int32 max_value) {
   return (int32)value;
 }
 
-extern "C" Datum pg_faiss_index_autotune(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_autotune(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
   char* mode_text = text_to_cstring(PG_GETARG_TEXT_PP(1));
   Jsonb* options = PG_GETARG_JSONB_P(2);
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   int mode = parse_autotune_mode(mode_text);
   double target_recall = 0.95;
   int32 min_batch_size = 32;
@@ -1374,24 +1374,24 @@ extern "C" Datum pg_faiss_index_autotune(PG_FUNCTION_ARGS) {
   min_batch_size = jsonb_option_int32(options, "min_batch_size", 32, 1, 65536);
   max_batch_size = jsonb_option_int32(options, "max_batch_size", 4096, min_batch_size, 65536);
 
-  if (entry->index_type == PG_FAISS_INDEX_HNSW) {
+  if (entry->index_type == pg_retrieval_engine_INDEX_HNSW) {
     double multiplier = 1.0;
     int64 suggested = (int64)(sqrt((double)std::max<int64>(entry->num_vectors, 1)) * 8.0);
 
-    if (mode == PG_FAISS_AUTOTUNE_LATENCY) multiplier = 0.75;
-    if (mode == PG_FAISS_AUTOTUNE_RECALL) multiplier = 1.75;
+    if (mode == pg_retrieval_engine_AUTOTUNE_LATENCY) multiplier = 0.75;
+    if (mode == pg_retrieval_engine_AUTOTUNE_RECALL) multiplier = 1.75;
     if (target_recall > 0.98) multiplier *= 1.25;
 
     suggested = (int64)((double)suggested * multiplier);
     entry->hnsw_ef_search = clamp_int32(suggested, 16, 4096);
   }
 
-  if (entry->index_type == PG_FAISS_INDEX_IVF_FLAT || entry->index_type == PG_FAISS_INDEX_IVF_PQ) {
+  if (entry->index_type == pg_retrieval_engine_INDEX_IVF_FLAT || entry->index_type == pg_retrieval_engine_INDEX_IVF_PQ) {
     double multiplier = 1.0;
     int64 suggested = (int64)(sqrt((double)std::max(entry->ivf_nlist, 1)));
 
-    if (mode == PG_FAISS_AUTOTUNE_LATENCY) multiplier = 0.75;
-    if (mode == PG_FAISS_AUTOTUNE_RECALL) multiplier = 2.0;
+    if (mode == pg_retrieval_engine_AUTOTUNE_LATENCY) multiplier = 0.75;
+    if (mode == pg_retrieval_engine_AUTOTUNE_RECALL) multiplier = 2.0;
     if (target_recall > 0.98) multiplier *= 1.2;
 
     suggested = (int64)((double)suggested * multiplier);
@@ -1399,11 +1399,11 @@ extern "C" Datum pg_faiss_index_autotune(PG_FUNCTION_ARGS) {
   }
 
   {
-    int64 base_batch = (entry->device == PG_FAISS_DEVICE_GPU) ? 2048 : 256;
+    int64 base_batch = (entry->device == pg_retrieval_engine_DEVICE_GPU) ? 2048 : 256;
     int64 dim_penalty = std::max(entry->dim, 1) / 16;
 
-    if (mode == PG_FAISS_AUTOTUNE_LATENCY) base_batch = base_batch / 2;
-    if (mode == PG_FAISS_AUTOTUNE_RECALL) base_batch = base_batch * 2;
+    if (mode == pg_retrieval_engine_AUTOTUNE_LATENCY) base_batch = base_batch / 2;
+    if (mode == pg_retrieval_engine_AUTOTUNE_RECALL) base_batch = base_batch * 2;
 
     base_batch = base_batch - dim_penalty;
     entry->preferred_batch_size = clamp_int32(base_batch, min_batch_size, max_batch_size);
@@ -1440,15 +1440,15 @@ extern "C" Datum pg_faiss_index_autotune(PG_FUNCTION_ARGS) {
   PG_RETURN_DATUM(result);
 }
 
-extern "C" Datum pg_faiss_metrics_reset(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_metrics_reset(PG_FUNCTION_ARGS) {
   HASH_SEQ_STATUS status;
-  PgFaissIndexEntry* entry;
+  PgRetrievalEngineIndexEntry* entry;
 
   ensure_registry();
 
   if (PG_ARGISNULL(0)) {
-    hash_seq_init(&status, pg_faiss_registry);
-    while ((entry = (PgFaissIndexEntry*)hash_seq_search(&status)) != NULL)
+    hash_seq_init(&status, pg_retrieval_engine_registry);
+    while ((entry = (PgRetrievalEngineIndexEntry*)hash_seq_search(&status)) != NULL)
       reset_runtime_stats(entry, false);
   } else {
     char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -1465,9 +1465,9 @@ extern "C" Datum pg_faiss_metrics_reset(PG_FUNCTION_ARGS) {
   PG_RETURN_VOID();
 }
 
-extern "C" Datum pg_faiss_index_stats(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_stats(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
-  PgFaissIndexEntry* entry = lookup_entry(name);
+  PgRetrievalEngineIndexEntry* entry = lookup_entry(name);
   StringInfoData json;
   Datum result;
 
@@ -1483,7 +1483,7 @@ extern "C" Datum pg_faiss_index_stats(PG_FUNCTION_ARGS) {
   escape_json(&json, entry->name);
   appendStringInfoString(&json, ",");
 
-  appendStringInfo(&json, "\"version\":\"%s\",", PG_FAISS_VERSION);
+  appendStringInfo(&json, "\"version\":\"%s\",", pg_retrieval_engine_VERSION);
   appendStringInfo(&json, "\"dim\":%d,", entry->dim);
   appendStringInfo(&json, "\"metric\":\"%s\",", metric_name(entry->metric));
   appendStringInfo(&json, "\"index_type\":\"%s\",", index_type_name(entry->index_type));
@@ -1536,9 +1536,9 @@ extern "C" Datum pg_faiss_index_stats(PG_FUNCTION_ARGS) {
   PG_RETURN_DATUM(result);
 }
 
-extern "C" Datum pg_faiss_index_drop(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_index_drop(PG_FUNCTION_ARGS) {
   char* name = text_to_cstring(PG_GETARG_TEXT_PP(0));
-  PgFaissIndexEntry* entry;
+  PgRetrievalEngineIndexEntry* entry;
 
   ensure_registry();
   entry = lookup_entry(name);
@@ -1548,23 +1548,23 @@ extern "C" Datum pg_faiss_index_drop(PG_FUNCTION_ARGS) {
             (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("index \"%s\" does not exist", name)));
 
   free_entry_resources(entry);
-  hash_search(pg_faiss_registry, name, HASH_REMOVE, NULL);
+  hash_search(pg_retrieval_engine_registry, name, HASH_REMOVE, NULL);
 
   pfree(name);
   PG_RETURN_VOID();
 }
 
-extern "C" Datum pg_faiss_reset(PG_FUNCTION_ARGS) {
+extern "C" Datum pg_retrieval_engine_reset(PG_FUNCTION_ARGS) {
   HASH_SEQ_STATUS status;
-  PgFaissIndexEntry* entry;
+  PgRetrievalEngineIndexEntry* entry;
 
-  if (pg_faiss_registry != NULL) {
-    hash_seq_init(&status, pg_faiss_registry);
-    while ((entry = (PgFaissIndexEntry*)hash_seq_search(&status)) != NULL)
+  if (pg_retrieval_engine_registry != NULL) {
+    hash_seq_init(&status, pg_retrieval_engine_registry);
+    while ((entry = (PgRetrievalEngineIndexEntry*)hash_seq_search(&status)) != NULL)
       free_entry_resources(entry);
 
-    hash_destroy(pg_faiss_registry);
-    pg_faiss_registry = NULL;
+    hash_destroy(pg_retrieval_engine_registry);
+    pg_retrieval_engine_registry = NULL;
   }
 
   ensure_registry();

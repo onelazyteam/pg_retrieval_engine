@@ -1,4 +1,4 @@
-# pg_faiss v0.2 Usage Guide
+# pg_retrieval_engine v0.2 Usage Guide
 
 ## 1. Prerequisites and Build
 
@@ -30,10 +30,10 @@ cmake --build build -j
 cmake --install build
 ```
 
-### 1.3 Build/install pg_faiss (CPU)
+### 1.3 Build/install pg_retrieval_engine (CPU)
 
 ```bash
-cd contrib/pg_faiss
+cd contrib/pg_retrieval_engine
 make \
   PG_CPPFLAGS="-I$HOME/faiss-install/include -I/usr/local/opt/libomp/include -std=c++17" \
   SHLIB_LINK="-L$HOME/faiss-install/lib -lfaiss -L/usr/local/opt/libomp/lib -lomp -framework Accelerate -lc++ -lc++abi -bundle_loader $(pg_config --bindir)/postgres"
@@ -43,7 +43,7 @@ make install
 ### 1.4 GPU build (optional)
 
 ```bash
-cd contrib/pg_faiss
+cd contrib/pg_retrieval_engine
 make USE_FAISS_GPU=1 FAISS_GPU_LIBS="-lfaiss -lcudart -lcublas"
 make install
 ```
@@ -52,7 +52,7 @@ make install
 
 ```sql
 CREATE EXTENSION vector;
-CREATE EXTENSION pg_faiss;
+CREATE EXTENSION pg_retrieval_engine;
 ```
 
 ## 3. Quick Start
@@ -60,13 +60,13 @@ CREATE EXTENSION pg_faiss;
 ### 3.1 Create and insert
 
 ```sql
-SELECT pg_faiss_index_create(
+SELECT pg_retrieval_engine_index_create(
   'docs_hnsw', 768, 'cosine', 'hnsw',
   '{"m":32,"ef_construction":200,"ef_search":64}'::jsonb,
   'cpu'
 );
 
-SELECT pg_faiss_index_add(
+SELECT pg_retrieval_engine_index_add(
   'docs_hnsw',
   ARRAY[1,2,3]::bigint[],
   ARRAY[
@@ -81,7 +81,7 @@ SELECT pg_faiss_index_add(
 
 ```sql
 SELECT *
-FROM pg_faiss_index_search(
+FROM pg_retrieval_engine_index_search(
   'docs_hnsw',
   '[0.1,0.2,0.3]'::vector,
   10,
@@ -93,7 +93,7 @@ FROM pg_faiss_index_search(
 
 ```sql
 SELECT *
-FROM pg_faiss_index_search_batch(
+FROM pg_retrieval_engine_index_search_batch(
   'docs_hnsw',
   ARRAY['[0.1,0.2,0.3]'::vector, '[0.0,0.5,0.5]'::vector]::vector[],
   5,
@@ -106,8 +106,8 @@ FROM pg_faiss_index_search_batch(
 ### 4.1 Observability
 
 ```sql
-SELECT pg_faiss_index_stats('docs_hnsw');
-SELECT pg_faiss_metrics_reset('docs_hnsw');
+SELECT pg_retrieval_engine_index_stats('docs_hnsw');
+SELECT pg_retrieval_engine_metrics_reset('docs_hnsw');
 ```
 
 ### 4.2 Hybrid retrieval (ANN + business filtering)
@@ -121,7 +121,7 @@ WITH allow_list AS (
     AND is_active = true
 )
 SELECT *
-FROM pg_faiss_index_search_filtered(
+FROM pg_retrieval_engine_index_search_filtered(
   'docs_hnsw',
   '[0.1,0.2,0.3]'::vector,
   20,
@@ -133,7 +133,7 @@ FROM pg_faiss_index_search_filtered(
 ### 4.3 Auto tuning
 
 ```sql
-SELECT pg_faiss_index_autotune(
+SELECT pg_retrieval_engine_index_autotune(
   'docs_hnsw',
   'balanced',
   '{"target_recall":0.97,"min_batch_size":64,"max_batch_size":2048}'::jsonb
@@ -144,7 +144,7 @@ SELECT pg_faiss_index_autotune(
 
 ```sql
 SELECT *
-FROM pg_faiss_index_search_batch_filtered(
+FROM pg_retrieval_engine_index_search_batch_filtered(
   'docs_hnsw',
   ARRAY['[0.1,0.2,0.3]'::vector, '[0.0,0.5,0.5]'::vector]::vector[],
   10,
@@ -156,9 +156,9 @@ FROM pg_faiss_index_search_batch_filtered(
 ## 5. Persistence
 
 ```sql
-SELECT pg_faiss_index_save('docs_hnsw', '/tmp/docs_hnsw.faiss');
-SELECT pg_faiss_index_drop('docs_hnsw');
-SELECT pg_faiss_index_load('docs_hnsw', '/tmp/docs_hnsw.faiss', 'cpu');
+SELECT pg_retrieval_engine_index_save('docs_hnsw', '/tmp/docs_hnsw.faiss');
+SELECT pg_retrieval_engine_index_drop('docs_hnsw');
+SELECT pg_retrieval_engine_index_load('docs_hnsw', '/tmp/docs_hnsw.faiss', 'cpu');
 ```
 
 ## 6. Testing
@@ -171,10 +171,10 @@ prove -I ./test/perl test/t/010_recall.pl
 Heavy benchmark:
 
 ```bash
-PG_FAISS_RUN_PERF=1 \
-PG_FAISS_PERF_ROWS=1000000 \
-PG_FAISS_PERF_DIM=768 \
-PG_FAISS_PERF_QUERIES=100 \
+pg_retrieval_engine_RUN_PERF=1 \
+pg_retrieval_engine_PERF_ROWS=1000000 \
+pg_retrieval_engine_PERF_DIM=768 \
+pg_retrieval_engine_PERF_QUERIES=100 \
 prove -I ./test/perl test/t/020_perf_cpu_vs_pgvector.pl
 ```
 

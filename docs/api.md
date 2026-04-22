@@ -1,4 +1,4 @@
-# pg_faiss v0.2 API Reference (Detailed)
+# pg_retrieval_engine v0.2 API Reference (Detailed)
 
 ## 1. Global Notes
 
@@ -11,27 +11,27 @@
 
 | Function | Return | Purpose |
 |---|---|---|
-| `pg_faiss_index_create` | `void` | Create index object |
-| `pg_faiss_index_train` | `void` | Train IVF/IVFPQ |
-| `pg_faiss_index_add` | `bigint` | Bulk insert vectors |
-| `pg_faiss_index_search` | `table(id, distance)` | Single-query ANN |
-| `pg_faiss_index_search_batch` | `table(query_no, id, distance)` | Batch ANN (optimized path) |
-| `pg_faiss_index_search_filtered` | `table(id, distance)` | Hybrid retrieval (single query, ID filter) |
-| `pg_faiss_index_search_batch_filtered` | `table(query_no, id, distance)` | Hybrid retrieval (batch query, ID filter) |
-| `pg_faiss_index_autotune` | `jsonb` | Auto tune defaults |
-| `pg_faiss_metrics_reset` | `void` | Reset runtime counters |
-| `pg_faiss_index_save` | `void` | Persist index |
-| `pg_faiss_index_load` | `void` | Load index |
-| `pg_faiss_index_stats` | `jsonb` | Metadata + runtime metrics |
-| `pg_faiss_index_drop` | `void` | Drop index |
-| `pg_faiss_reset` | `void` | Drop all indexes in current backend |
+| `pg_retrieval_engine_index_create` | `void` | Create index object |
+| `pg_retrieval_engine_index_train` | `void` | Train IVF/IVFPQ |
+| `pg_retrieval_engine_index_add` | `bigint` | Bulk insert vectors |
+| `pg_retrieval_engine_index_search` | `table(id, distance)` | Single-query ANN |
+| `pg_retrieval_engine_index_search_batch` | `table(query_no, id, distance)` | Batch ANN (optimized path) |
+| `pg_retrieval_engine_index_search_filtered` | `table(id, distance)` | Hybrid retrieval (single query, ID filter) |
+| `pg_retrieval_engine_index_search_batch_filtered` | `table(query_no, id, distance)` | Hybrid retrieval (batch query, ID filter) |
+| `pg_retrieval_engine_index_autotune` | `jsonb` | Auto tune defaults |
+| `pg_retrieval_engine_metrics_reset` | `void` | Reset runtime counters |
+| `pg_retrieval_engine_index_save` | `void` | Persist index |
+| `pg_retrieval_engine_index_load` | `void` | Load index |
+| `pg_retrieval_engine_index_stats` | `jsonb` | Metadata + runtime metrics |
+| `pg_retrieval_engine_index_drop` | `void` | Drop index |
+| `pg_retrieval_engine_reset` | `void` | Drop all indexes in current backend |
 
 ## 3. API Details
 
-### 3.1 `pg_faiss_index_create`
+### 3.1 `pg_retrieval_engine_index_create`
 
 ```sql
-pg_faiss_index_create(
+pg_retrieval_engine_index_create(
   name text,
   dim int,
   metric text,
@@ -61,27 +61,27 @@ Supported `options`:
 - `pq_bits` (IVFPQ, default 8)
 - `gpu_device` (GPU id, default 0)
 
-### 3.2 `pg_faiss_index_train`
+### 3.2 `pg_retrieval_engine_index_train`
 
 ```sql
-pg_faiss_index_train(name text, training_vectors vector[]) returns void
+pg_retrieval_engine_index_train(name text, training_vectors vector[]) returns void
 ```
 
 - `training_vectors` must be one-dimensional, non-empty, no NULLs, and dimension-matched.
 
-### 3.3 `pg_faiss_index_add`
+### 3.3 `pg_retrieval_engine_index_add`
 
 ```sql
-pg_faiss_index_add(name text, ids bigint[], vectors vector[]) returns bigint
+pg_retrieval_engine_index_add(name text, ids bigint[], vectors vector[]) returns bigint
 ```
 
 - `ids` and `vectors` must have identical length.
 - Returns number of vectors inserted.
 
-### 3.4 `pg_faiss_index_search`
+### 3.4 `pg_retrieval_engine_index_search`
 
 ```sql
-pg_faiss_index_search(
+pg_retrieval_engine_index_search(
   name text,
   query vector,
   k int,
@@ -95,10 +95,10 @@ pg_faiss_index_search(
 - `nprobe` (IVF probes)
 - `candidate_k` (candidate depth, default `k`)
 
-### 3.5 `pg_faiss_index_search_batch`
+### 3.5 `pg_retrieval_engine_index_search_batch`
 
 ```sql
-pg_faiss_index_search_batch(
+pg_retrieval_engine_index_search_batch(
   name text,
   queries vector[],
   k int,
@@ -113,10 +113,10 @@ pg_faiss_index_search_batch(
 - `candidate_k`
 - `batch_size` (chunk size, default = index `preferred_batch_size`)
 
-### 3.6 `pg_faiss_index_search_filtered`
+### 3.6 `pg_retrieval_engine_index_search_filtered`
 
 ```sql
-pg_faiss_index_search_filtered(
+pg_retrieval_engine_index_search_filtered(
   name text,
   query vector,
   k int,
@@ -127,10 +127,10 @@ pg_faiss_index_search_filtered(
 
 Performs ANN retrieval and keeps only IDs from `filter_ids`.
 
-### 3.7 `pg_faiss_index_search_batch_filtered`
+### 3.7 `pg_retrieval_engine_index_search_batch_filtered`
 
 ```sql
-pg_faiss_index_search_batch_filtered(
+pg_retrieval_engine_index_search_batch_filtered(
   name text,
   queries vector[],
   k int,
@@ -141,10 +141,10 @@ pg_faiss_index_search_batch_filtered(
 
 Batch hybrid retrieval with per-query top-k after filtering.
 
-### 3.8 `pg_faiss_index_autotune`
+### 3.8 `pg_retrieval_engine_index_autotune`
 
 ```sql
-pg_faiss_index_autotune(
+pg_retrieval_engine_index_autotune(
   name text,
   mode text default 'balanced',
   options jsonb default '{}'::jsonb
@@ -161,36 +161,36 @@ Arguments:
 
 Returns JSON old/new diffs for `hnsw_ef_search`, `ivf_nprobe`, and `preferred_batch_size`.
 
-### 3.9 `pg_faiss_metrics_reset`
+### 3.9 `pg_retrieval_engine_metrics_reset`
 
 ```sql
-pg_faiss_metrics_reset(name text default null) returns void
+pg_retrieval_engine_metrics_reset(name text default null) returns void
 ```
 
 - `name is null`: reset runtime counters for all indexes in current backend.
 - `name is not null`: reset only the target index.
 
-### 3.10 `pg_faiss_index_save`
+### 3.10 `pg_retrieval_engine_index_save`
 
 ```sql
-pg_faiss_index_save(name text, path text) returns void
+pg_retrieval_engine_index_save(name text, path text) returns void
 ```
 
 - Main index file: `path`
 - Sidecar metadata: `path.meta`
 
-### 3.11 `pg_faiss_index_load`
+### 3.11 `pg_retrieval_engine_index_load`
 
 ```sql
-pg_faiss_index_load(name text, path text, device text default 'cpu') returns void
+pg_retrieval_engine_index_load(name text, path text, device text default 'cpu') returns void
 ```
 
 Loads a persisted index under a new runtime name.
 
-### 3.12 `pg_faiss_index_stats`
+### 3.12 `pg_retrieval_engine_index_stats`
 
 ```sql
-pg_faiss_index_stats(name text) returns jsonb
+pg_retrieval_engine_index_stats(name text) returns jsonb
 ```
 
 Returns:
@@ -199,16 +199,16 @@ Returns:
 - Config snapshots: `hnsw/ivf/ivfpq`
 - Runtime metrics: `runtime.*` (call counts, timing totals/averages, latest candidate/batch knobs, autotune state)
 
-### 3.13 `pg_faiss_index_drop`
+### 3.13 `pg_retrieval_engine_index_drop`
 
 ```sql
-pg_faiss_index_drop(name text) returns void
+pg_retrieval_engine_index_drop(name text) returns void
 ```
 
-### 3.14 `pg_faiss_reset`
+### 3.14 `pg_retrieval_engine_reset`
 
 ```sql
-pg_faiss_reset() returns void
+pg_retrieval_engine_reset() returns void
 ```
 
 ## 4. Common Errors
@@ -229,7 +229,7 @@ WITH allow_list AS (
     AND is_active = true
 )
 SELECT *
-FROM pg_faiss_index_search_filtered(
+FROM pg_retrieval_engine_index_search_filtered(
   'prod_idx',
   '[0.1,0.2,0.3,0.4]'::vector,
   20,

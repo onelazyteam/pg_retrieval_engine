@@ -3,7 +3,7 @@
   const zhBtn = document.getElementById('lang-zh');
   const enBtn = document.getElementById('lang-en');
   const repoLink = document.getElementById('repo-link');
-  const key = 'pg_faiss_site_lang';
+  const key = 'pg_retrieval_engine_site_lang';
 
   function setLang(lang) {
     html.lang = lang === 'en' ? 'en' : 'zh-CN';

@@ -1,0 +1,2 @@
+-- Draft scaffold: index templates for dense/sparse/hybrid retrieval.
+-- Not wired into extension install path yet.

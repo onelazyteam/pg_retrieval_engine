@@ -17,6 +17,48 @@ English version: [README.md](README.md)
 - 版本化扩展脚本（`pg_retrieval_engine--0.2.0.sql`）
 - 回归测试 + TAP（正确性、召回、性能）
 
+## 目录结构（当前阶段）
+
+```text
+pg-retrieval-engine/
+├── README.md
+├── README.zh.md
+├── docs/
+│   ├── api*.md / design*.md / usage*.md
+│   ├── architecture.md                 # 新增：总体架构草案
+│   ├── benchmark-methodology.md        # 新增：基准方法草案
+│   ├── evaluation-protocol.md          # 新增：评测协议草案
+│   ├── observability.md                # 新增：可观测性草案
+│   └── tradeoffs.md                    # 新增：权衡分析草案
+├── src/
+│   ├── faiss_in_pg/                    # 已实现
+│   │   ├── pg_retrieval_engine.cpp
+│   │   └── pg_retrieval_engine.h
+│   ├── disk_graph/                     # 目录占位，暂未实现
+│   ├── fts_rerank/                     # 目录占位，暂未实现
+│   └── rrf_sql/                        # 目录占位，暂未实现
+├── sql/
+│   ├── pg_retrieval_engine--*.sql      # 扩展安装脚本（已使用）
+│   ├── schema.sql                      # 占位
+│   ├── indexes.sql                     # 占位
+│   ├── hybrid_search.sql               # 占位
+│   └── eval_queries.sql                # 占位
+├── bench/
+│   ├── run_bench.py                    # 占位
+│   ├── run_ablation.py                 # 占位
+│   ├── configs/
+│   └── results/
+├── evals/
+│   ├── queries.jsonl                   # 占位样例
+│   ├── qrels.tsv                       # 占位样例
+│   ├── metrics.py                      # 占位
+│   └── run_eval.py                     # 占位
+├── demo/
+│   ├── cli_demo.py                     # 占位
+│   └── screenshots/
+└── .github/workflows/
+```
+
 ## 对比基线版本
 
 - PostgreSQL：18.3
@@ -150,7 +192,7 @@ prove -I ./test/perl test/t/030_perf_gpu_vs_pgvector.pl
 
 ## C++ 代码规范
 
-- `src/pg_retrieval_engine.cpp` / `src/pg_retrieval_engine.h` 按 Google C++ 风格格式化。
+- `src/faiss_in_pg/pg_retrieval_engine.cpp` / `src/faiss_in_pg/pg_retrieval_engine.h` 按 Google C++ 风格格式化。
 - 规范配置文件：`contrib/pg_retrieval_engine/.clang-format`。
 - 本地格式化：`make -C contrib/pg_retrieval_engine format`
 - 本地检查：`make -C contrib/pg_retrieval_engine format-check`

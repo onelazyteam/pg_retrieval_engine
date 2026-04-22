@@ -38,8 +38,8 @@
 
 ### 4.1 组件
 
-- 入口文件：`src/pg_retrieval_engine.cpp`
-- 元信息定义：`src/pg_retrieval_engine.h`
+- 入口文件：`src/faiss_in_pg/pg_retrieval_engine.cpp`
+- 元信息定义：`src/faiss_in_pg/pg_retrieval_engine.h`
 - SQL 定义：`sql/pg_retrieval_engine--0.2.0.sql`
 - 注册表：backend 本地 `HTAB`（键为 index name）
 - 运行态对象：

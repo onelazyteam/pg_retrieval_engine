@@ -1,0 +1,2 @@
+-- Draft scaffold: hybrid search SQL and RRF composition examples.
+-- Not wired into extension install path yet.

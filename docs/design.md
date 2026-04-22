@@ -38,8 +38,8 @@ This document is for engineers taking over `pg_retrieval_engine`. It explains:
 
 ### 4.1 Components
 
-- Entry implementation: `src/pg_retrieval_engine.cpp`
-- Shared type definitions: `src/pg_retrieval_engine.h`
+- Entry implementation: `src/faiss_in_pg/pg_retrieval_engine.cpp`
+- Shared type definitions: `src/faiss_in_pg/pg_retrieval_engine.h`
 - SQL API definitions: `sql/pg_retrieval_engine--0.2.0.sql`
 - Registry: backend-local `HTAB` keyed by index name
 - Runtime index handles:

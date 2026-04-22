@@ -1,0 +1,2 @@
+-- Draft scaffold: logical schema for hybrid retrieval experiments.
+-- Not wired into extension install path yet.

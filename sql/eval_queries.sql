@@ -1,0 +1,2 @@
+-- Draft scaffold: evaluation query templates.
+-- Not wired into extension install path yet.

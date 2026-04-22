@@ -17,6 +17,48 @@ FAISS-based vector search extension for PostgreSQL (v0.2).
 - Versioned extension SQL (`pg_retrieval_engine--0.2.0.sql`)
 - Regression + TAP tests (correctness, recall, performance)
 
+## Repository Layout (Current Phase)
+
+```text
+pg-retrieval-engine/
+├── README.md
+├── README.zh.md
+├── docs/
+│   ├── api*.md / design*.md / usage*.md
+│   ├── architecture.md            # new scaffold
+│   ├── benchmark-methodology.md   # new scaffold
+│   ├── evaluation-protocol.md     # new scaffold
+│   ├── observability.md           # new scaffold
+│   └── tradeoffs.md               # new scaffold
+├── src/
+│   ├── faiss_in_pg/               # implemented
+│   │   ├── pg_retrieval_engine.cpp
+│   │   └── pg_retrieval_engine.h
+│   ├── disk_graph/                # scaffold only
+│   ├── fts_rerank/                # scaffold only
+│   └── rrf_sql/                   # scaffold only
+├── sql/
+│   ├── pg_retrieval_engine--*.sql # active extension SQL
+│   ├── schema.sql                 # scaffold
+│   ├── indexes.sql                # scaffold
+│   ├── hybrid_search.sql          # scaffold
+│   └── eval_queries.sql           # scaffold
+├── bench/
+│   ├── run_bench.py               # scaffold
+│   ├── run_ablation.py            # scaffold
+│   ├── configs/
+│   └── results/
+├── evals/
+│   ├── queries.jsonl              # sample scaffold
+│   ├── qrels.tsv                  # sample scaffold
+│   ├── metrics.py                 # scaffold
+│   └── run_eval.py                # scaffold
+├── demo/
+│   ├── cli_demo.py                # scaffold
+│   └── screenshots/
+└── .github/workflows/
+```
+
 ## Baseline Versions
 
 - PostgreSQL: 18.3
@@ -150,7 +192,7 @@ See the API reference for full parameter semantics and error behavior.
 
 ## C++ Style
 
-- `src/pg_retrieval_engine.cpp` and `src/pg_retrieval_engine.h` are formatted to Google C++ style.
+- `src/faiss_in_pg/pg_retrieval_engine.cpp` and `src/faiss_in_pg/pg_retrieval_engine.h` are formatted to Google C++ style.
 - Style config: `contrib/pg_retrieval_engine/.clang-format`.
 - Format locally: `make -C contrib/pg_retrieval_engine format`
 - Check formatting: `make -C contrib/pg_retrieval_engine format-check`

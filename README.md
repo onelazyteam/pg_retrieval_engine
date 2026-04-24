@@ -32,8 +32,8 @@ pg-retrieval-engine/
 │   └── tradeoffs.md               # new scaffold
 ├── src/
 │   ├── faiss_in_pg/               # implemented
-│   │   ├── pg_retrieval_engine.cpp
-│   │   └── pg_retrieval_engine.h
+│   │   ├── faiss_engine.cpp
+│   │   └── faiss_engine.hpp
 │   ├── disk_graph/                # scaffold only
 │   ├── fts_rerank/                # scaffold only
 │   └── rrf_sql/                   # scaffold only
@@ -192,7 +192,7 @@ See the API reference for full parameter semantics and error behavior.
 
 ## C++ Style
 
-- `src/faiss_in_pg/pg_retrieval_engine.cpp` and `src/faiss_in_pg/pg_retrieval_engine.h` are formatted to Google C++ style.
+- `src/faiss_in_pg/faiss_engine.cpp` and `src/faiss_in_pg/faiss_engine.hpp` are formatted to Google C++ style.
 - Style config: `contrib/pg_retrieval_engine/.clang-format`.
 - Format locally: `make -C contrib/pg_retrieval_engine format`
 - Check formatting: `make -C contrib/pg_retrieval_engine format-check`

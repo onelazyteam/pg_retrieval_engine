@@ -3,8 +3,8 @@ EXTVERSION = 0.2.0
 
 MODULE_big = pg_retrieval_engine
 
-OBJS = src/faiss_in_pg/pg_retrieval_engine.o
-HEADERS = src/faiss_in_pg/pg_retrieval_engine.h
+OBJS = src/faiss_in_pg/faiss_engine.o
+HEADERS = src/faiss_in_pg/faiss_engine.hpp
 
 DATA = $(wildcard sql/*--*.sql)
 
@@ -35,7 +35,7 @@ endif
 PROVE_FLAGS += -I ./test/perl
 
 CLANG_FORMAT ?= clang-format
-FORMAT_FILES = src/faiss_in_pg/pg_retrieval_engine.cpp src/faiss_in_pg/pg_retrieval_engine.h
+FORMAT_FILES = src/faiss_in_pg/faiss_engine.cpp src/faiss_in_pg/faiss_engine.hpp
 
 prove_installcheck:
 	rm -rf $(CURDIR)/tmp_check

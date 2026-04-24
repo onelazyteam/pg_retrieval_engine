@@ -18,7 +18,7 @@ extern "C" {
 #include "utils/tuplestore.h"
 }
 
-#include "pg_retrieval_engine.h"
+#include "faiss_engine.hpp"
 
 #include <algorithm>
 #include <cmath>

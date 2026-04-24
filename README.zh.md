@@ -32,8 +32,8 @@ pg-retrieval-engine/
 │   └── tradeoffs.md                    # 新增：权衡分析草案
 ├── src/
 │   ├── faiss_in_pg/                    # 已实现
-│   │   ├── pg_retrieval_engine.cpp
-│   │   └── pg_retrieval_engine.h
+│   │   ├── faiss_engine.cpp
+│   │   └── faiss_engine.hpp
 │   ├── disk_graph/                     # 目录占位，暂未实现
 │   ├── fts_rerank/                     # 目录占位，暂未实现
 │   └── rrf_sql/                        # 目录占位，暂未实现
@@ -192,7 +192,7 @@ prove -I ./test/perl test/t/030_perf_gpu_vs_pgvector.pl
 
 ## C++ 代码规范
 
-- `src/faiss_in_pg/pg_retrieval_engine.cpp` / `src/faiss_in_pg/pg_retrieval_engine.h` 按 Google C++ 风格格式化。
+- `src/faiss_in_pg/faiss_engine.cpp` / `src/faiss_in_pg/faiss_engine.hpp` 按 Google C++ 风格格式化。
 - 规范配置文件：`contrib/pg_retrieval_engine/.clang-format`。
 - 本地格式化：`make -C contrib/pg_retrieval_engine format`
 - 本地检查：`make -C contrib/pg_retrieval_engine format-check`
